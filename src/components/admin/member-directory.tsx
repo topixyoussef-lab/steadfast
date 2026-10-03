@@ -6,17 +6,32 @@ import Link from "next/link";
 import { ChevronIcon, SearchIcon } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { interpolate } from "@/lib/i18n/interpolate";
+import { authEmailToPhone, formatPhone } from "@/lib/phone";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 
 export type MemberRow = {
   id: string;
   display_name: string | null;
-  email: string | null;
+  /** Absent once get_admin_members returns phone instead of email. */
+  email?: string | null;
+  /** Absent until migration 0003 adds profiles.phone. */
+  phone?: string | null;
   role: string;
   current_streak: number;
   last_active_day: string | null;
   is_suspended: boolean;
 };
+
+/**
+ * A member's identity is their phone number, but the directory receives either
+ * the real column or the synthetic auth address depending on which migrations
+ * have been applied, so accept both. Staff accounts with a genuine email keep
+ * showing it, since there is no phone to derive.
+ */
+function memberIdentity(member: MemberRow): string | null {
+  const phone = formatPhone(member.phone ?? authEmailToPhone(member.email));
+  return phone || member.email || null;
+}
 
 /**
  * Member directory for the console. Filtering happens in the browser because
@@ -38,7 +53,7 @@ export function MemberDirectory({
     if (!needle) return members;
 
     return members.filter((member) =>
-      [member.display_name, member.email, member.id]
+      [member.display_name, memberIdentity(member), member.email, member.id]
         .filter((value): value is string => Boolean(value))
         .some((value) => value.toLowerCase().includes(needle)),
     );
@@ -83,7 +98,9 @@ export function MemberDirectory({
                     <span className="block truncate text-sm font-semibold">
                       {member.display_name ?? dict.admin.unnamed}
                     </span>
-                    <span className="block truncate text-xs text-faint">{member.email}</span>
+                    <span className="block truncate text-xs text-faint">
+                      {memberIdentity(member)}
+                    </span>
                   </span>
                   <ChevronIcon className="mt-1 h-4 w-4 shrink-0 text-faint" />
                 </div>
