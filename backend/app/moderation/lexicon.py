@@ -191,7 +191,7 @@ HARM_TERMS: list[Term] = [
 # ---------------------------------------------------------------------------
 # FLAG -- ambiguous, allowed but logged for staff review
 # ---------------------------------------------------------------------------
-FLAG_TERMS: list[Term] = [
+ENGLISH_FLAG_TERMS: list[Term] = [
     Term("ihate myself", "self_hostility", "flag"),
     Term("ihateeverything", "self_hostility", "flag"),
     Term("worthless", "self_hostility", "flag"),
@@ -211,7 +211,7 @@ FLAG_TERMS: list[Term] = [
 # Present as documentation and as a regression guard: if a future change
 # adds one of these to a BLOCK list, the test suite fails.
 # ---------------------------------------------------------------------------
-RECOVERY_SAFE: list[str] = [
+ENGLISH_RECOVERY_SAFE: list[str] = [
     "relapse", "relapsed", "relapsing",
     "porn", "pornography", "pornaddiction",
     "struggling", "struggle", "relapse", "lapse",
@@ -223,6 +223,138 @@ RECOVERY_SAFE: list[str] = [
     "help", "pleasehelp", "support", "felloff", "failed",
 ]
 
+# ---------------------------------------------------------------------------
+# BLOCK -- harassment / slurs aimed at another member
+#
+# The docstring above has always promised this tier exists; these are the terms.
+# Split by intent rather than by language: dehumanising and sexual slurs are
+# blocked outright, ordinary insults are only flagged. A member having a bad
+# night who calls someone an idiot is not the same event as a slur, and in a
+# recovery community the cost of silencing the first is higher than the cost of
+# letting a moderator read it.
+# ---------------------------------------------------------------------------
+HARASSMENT_TERMS: list[Term] = [
+    Term("يا ابن الكلب", "harassment", "block"),
+    Term("يا شرموط", "harassment", "block"),
+    Term("شرموطة", "harassment", "block"),
+    Term("يا عاهرة", "harassment", "block"),
+    Term("ابن القحبة", "harassment", "block"),
+    Term("يا قحبة", "harassment", "block"),
+    Term("يا معرص", "harassment", "block"),
+    Term("يا منوك", "harassment", "block"),
+    Term("يا خول", "harassment", "block"),
+]
+
+# ---------------------------------------------------------------------------
+# Arabic coverage
+#
+# The community is Arabic-first, so an English-only list means the moderation
+# engine effectively reads nothing most members write. normalize() folds hamza
+# and the round-ta, so every pattern below is written in ordinary spelling and
+# matched regardless of how the member typed it.
+# ---------------------------------------------------------------------------
+
+# Directed at a member, acute risk, or method-seeking. self_harm is never
+# rescued and always scores critical, matching the English tier above.
+ARABIC_HARM_TERMS: list[Term] = [
+    Term("أموت نفسي", "self_harm", "block"),
+    Term("اقتل نفسي", "self_harm", "block"),
+    Term("عايز أموت", "self_harm", "block"),
+    Term("عايزة أموت", "self_harm", "block"),
+    Term("ودي أموت", "self_harm", "block"),
+    Term("أنهي حياتي", "self_harm", "block"),
+    Term("شنق نفسي", "self_harm", "block"),
+    Term("أجرح نفسي", "self_harm", "block"),
+    Term("أذي نفسي", "self_harm", "block"),
+    Term("انتحر", "self_harm", "block"),
+    Term("هنتحر", "self_harm", "block"),
+    Term("طريقة الانتحار", "self_harm", "block"),
+    Term("روح موت نفسك", "self_harm", "block"),
+    Term("اقتل نفسك", "self_harm", "block"),
+]
+
+# Normalising or encouraging the behaviour for other people. Never rescued,
+# because the frame is aimed outward rather than at the author's own recovery.
+ARABIC_ENCOURAGEMENT_TERMS: list[Term] = [
+    Term("كل الناس بتتفرج", "encouragement", "block"),
+    Term("كل الناس بتعمل كده", "encouragement", "block"),
+    Term("الإباحية عادية", "encouragement", "block"),
+    Term("الإباحية طبيعية", "encouragement", "block"),
+    Term("محدش بيبطل", "encouragement", "block"),
+    Term("التعافي ملوش لازمة", "encouragement", "block"),
+    Term("ارجع اتفرج", "encouragement", "block"),
+]
+
+# Funnelling members off the platform, which is where the abuse actually starts.
+ARABIC_SOLICITATION_TERMS: list[Term] = [
+    Term("ضيفني على تليجرام", "solicitation", "block"),
+    Term("ضيفني تليجرام", "solicitation", "block"),
+    Term("كلمني على واتساب", "solicitation", "block"),
+    Term("عندي جروب تليجرام", "solicitation", "block"),
+    Term("ابعتلي على الخاص", "solicitation", "block"),
+    Term("هبعترك صور", "explicit", "block"),
+    Term("ابعتلك فيديو إباحي", "explicit", "block"),
+]
+
+# Intent plus noun, following ACQUISITION_TERMS above. The bare word "إباحية"
+# stays unblocked: naming the addiction is what recovery disclosure is made of.
+ARABIC_ACQUISITION_TERMS: list[Term] = [
+    Term("عايز أفلام إباحية", "explicit", "block"),
+    Term("عايزة مقاطع إباحية", "explicit", "block"),
+    Term("مواقع إباحية مجانية", "explicit", "block"),
+    Term("رابط موقع إباحي", "explicit", "block"),
+    Term("مقاطع إباحية للتحميل", "solicitation", "block"),
+    Term("دور على أفلام إباحية", "explicit", "block"),
+    Term("ابغى مقاطع إباحية", "explicit", "block"),
+]
+
+ARABIC_GAMBLING_TERMS: list[Term] = [
+    Term("موقع مراهنات", "gambling", "block"),
+    Term("كازينو أونلاين", "gambling", "block"),
+    Term("قمار أونلاين", "gambling", "block"),
+    Term("رهان مضمون", "gambling", "block"),
+    Term("ضاعف فلوسك", "gambling", "block"),
+]
+
+# Ordinary insults: logged and surfaced in the console, not walled off.
+ARABIC_INSULT_TERMS: list[Term] = [
+    Term("يا كلب", "harassment", "flag"),
+    Term("يا حمار", "harassment", "flag"),
+    Term("يا غبي", "harassment", "flag"),
+    Term("يا غبية", "harassment", "flag"),
+    Term("يا عبيط", "harassment", "flag"),
+    Term("يا حقير", "harassment", "flag"),
+    Term("يا تافه", "harassment", "flag"),
+    Term("يا وسخ", "harassment", "flag"),
+    Term("يا زبالة", "harassment", "flag"),
+    Term("انت غبي", "harassment", "flag"),
+]
+
+ARABIC_FLAG_TERMS: list[Term] = [
+    Term("بكره نفسي", "self_hostility", "flag"),
+    Term("أنا مقرف", "self_hostility", "flag"),
+    Term("أنا زبالة", "self_hostility", "flag"),
+    Term("مليش لازمة", "self_hostility", "flag"),
+    Term("بكره حياتي", "self_hostility", "flag"),
+    Term("تليجرام", "offplatform", "flag"),
+    Term("تيليجرام", "offplatform", "flag"),
+    Term("واتساب", "offplatform", "flag"),
+    Term("جروب واتساب", "offplatform", "flag"),
+    Term("سناب شات", "offplatform", "flag"),
+    Term("رقمك كام", "offplatform", "flag"),
+    Term("ابعت فلوس", "scam", "flag"),
+    Term("تحويل فلوس", "scam", "flag"),
+    Term("استثمار مضمون", "scam", "flag"),
+]
+
+# Recovery vocabulary in Arabic. Same role as RECOVERY_SAFE: documentation and
+# a regression guard against a future edit blocking disclosure.
+ARABIC_RECOVERY_SAFE: list[str] = [
+    "انتكاسة", "انتكست", "إدمان", "مدمن", "إباحية", "عادة سرية",
+    "شهوة", "تعافي", "نظيف", "رغبة", "محفزات", "علاج", "دعم",
+    "مساعدة", "ساعدوني", "خجل", "ذنب", "اكتئاب", "بطلت", "مصحة",
+]
+
 BLOCK_TERMS: list[Term] = (
     EXPLICIT_TERMS
     + EXPLICIT_PHRASES
@@ -231,4 +363,18 @@ BLOCK_TERMS: list[Term] = (
     + ENCOURAGEMENT_TERMS
     + GAMBLING_TERMS
     + HARM_TERMS
+    + HARASSMENT_TERMS
+    + ARABIC_HARM_TERMS
+    + ARABIC_ENCOURAGEMENT_TERMS
+    + ARABIC_SOLICITATION_TERMS
+    + ARABIC_ACQUISITION_TERMS
+    + ARABIC_GAMBLING_TERMS
 )
+
+FLAG_TERMS: list[Term] = (
+    ENGLISH_FLAG_TERMS
+    + ARABIC_INSULT_TERMS
+    + ARABIC_FLAG_TERMS
+)
+
+RECOVERY_SAFE: list[str] = [*ENGLISH_RECOVERY_SAFE, *ARABIC_RECOVERY_SAFE]

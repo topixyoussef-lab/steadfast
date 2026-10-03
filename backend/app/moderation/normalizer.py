@@ -17,6 +17,24 @@ _INVISIBLE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff\u00ad]"
 _ARABIC_TATWEEL = "\u0640"
 _ARABIC_MARKS = re.compile(r"[\u064b-\u0652\u0670\u06d6-\u06ed]")
 
+# Arabic letter variants that are spelling differences, not word differences.
+# Typing hamza and the round-ta is optional and inconsistent, so "الإباحية" and
+# "الاباحية" are the same word to a reader but not to a substring match. Folding
+# them is what makes an Arabic lexicon survivable; the patterns in lexicon.py go
+# through normalize() too, so they may be written in ordinary spelling.
+_ARABIC_FOLD = str.maketrans(
+    {
+        "\u0623": "\u0627",  # أ -> ا
+        "\u0625": "\u0627",  # إ -> ا
+        "\u0622": "\u0627",  # آ -> ا
+        "\u0671": "\u0627",  # ٱ -> ا
+        "\u0649": "\u064a",  # ى -> ي
+        "\u0629": "\u0647",  # ة -> ه
+        "\u0624": "\u0648",  # ؤ -> و
+        "\u0626": "\u064a",  # ئ -> ي
+    }
+)
+
 # Latin combining marks, after NFKD.
 _COMBINING = re.compile(r"[\u0300-\u036f]")
 
@@ -49,7 +67,10 @@ _HOMOGLYPHS = {
     "\u04cf": "l", "\u0261": "g",
 }
 
-_SEPARATORS = re.compile(r"[\s._\-*+~`'\"^|/\\]+")
+# Arabic comma/semicolon/question mark and the Arabic numeric signs sit inside
+# \u0600-\u06ff, so _NON_ALNUM keeps them; they have to go here instead or
+# "يا، كلب" stops matching a "يا كلب" pattern.
+_SEPARATORS = re.compile(r"[\s._\-*+~`'\"^|/\\\u0609-\u060c\u061b\u061f\u066a-\u066d]+")
 _NON_ALNUM = re.compile(r"[^0-9a-z\u0600-\u06ff]+")
 _REPEATS = re.compile(r"(.)\1{2,}")
 _REPEATS_ALL = re.compile(r"(.)\1+")
@@ -72,6 +93,7 @@ def normalize(text: str) -> str:
     out = _INVISIBLE.sub("", out)
     out = out.replace(_ARABIC_TATWEEL, "")
     out = _ARABIC_MARKS.sub("", out)
+    out = out.translate(_ARABIC_FOLD)
 
     for src, dst in _HOMOGLYPHS.items():
         out = out.replace(src, dst)

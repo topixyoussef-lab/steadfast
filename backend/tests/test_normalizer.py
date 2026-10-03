@@ -38,6 +38,27 @@ def test_arabic_tatweel_stripped() -> None:
     assert normalize("مـكـتـب") == "مكتب"
 
 
+def test_arabic_letter_variants_are_folded() -> None:
+    """Hamza and the round-ta are typing style, not different words."""
+    assert normalize("الإباحية") == normalize("الاباحيه")
+    assert normalize("أحمد") == normalize("احمد")
+    assert normalize("أيام") == normalize("ايام")
+    assert normalize("على") == normalize("علي")
+    assert normalize("شؤون") == normalize("شوون")
+    assert normalize("شيئ") == normalize("شئي")
+
+
+def test_arabic_punctuation_is_a_separator() -> None:
+    """These sit inside \\u0600-\\u06ff, so only the separator pass removes them."""
+    assert normalize("يا، كلب") == normalize("يا كلب")
+    assert normalize("يا كلب؟") == normalize("يا كلب")
+    assert "،" not in normalize("اه، لا")
+
+
+def test_arabic_folding_does_not_touch_latin() -> None:
+    assert normalize("PornHub") == "pornhub"
+
+
 def test_soft_normalize_keeps_spaces() -> None:
     assert soft_normalize("Hello   World") == "hello world"
     assert soft_normalize("I hate myself") == "i hate myself"

@@ -89,3 +89,10 @@ def test_max_message_chars_mirrors_the_database_check() -> None:
     """chat_messages.content is capped at 2000 in Postgres. If these drift,
     the endpoint rejects messages the database would have accepted."""
     assert Settings(API_TOKEN=TOKEN).max_message_chars == 2000
+
+
+def test_docs_are_hidden_in_production() -> None:
+    """The interactive schema is a map of an internal, token-gated API."""
+    assert Settings(API_TOKEN=TOKEN, ENVIRONMENT="production").docs_enabled is False
+    assert Settings(API_TOKEN=TOKEN, ENVIRONMENT="preview").docs_enabled is True
+    assert Settings(API_TOKEN=TOKEN).docs_enabled is True

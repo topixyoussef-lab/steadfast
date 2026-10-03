@@ -36,6 +36,17 @@ _RECOVERY_FRAMES = (
     "addictedto", "myaddiction", "quitting", "iquit", "relapse",
     "recovered", "recovery", "cleanstreak", "backontrack", "slipped",
     "usedto", "havenot", "notanymore", "freeof",
+    # Arabic frames, and unlike the lexicon these are NOT passed through
+    # normalize() -- they are matched against text that already is. So they are
+    # written pre-folded (no hamza, ة as ه) and pre-collapsed (no spaces),
+    # exactly the way normalize() would render them. Without these, an Arabic
+    # member disclosing a relapse while asking where to buy material gets a
+    # hard block instead of reaching a moderator, which is the one outcome this
+    # engine is designed never to produce.
+    "انتكست", "انتكاسه", "ادماني", "ادمنت", "مدمن", "تعافي",
+    "توقفت", "بطلت", "باقلع", "ايامنظيفه", "نظيف", "نضيف", "مصحه",
+    "علاج", "كنت", "مشبتفرج", "مبقتش", "رجعتتاني", "ساعدوني",
+    "محتاجمساعده", "بقيتنظيف", "سبتالاباحيه",
 )
 
 

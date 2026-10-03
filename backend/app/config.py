@@ -50,6 +50,16 @@ class Settings(BaseSettings):
     # Hard ceiling on message length, mirrored from the Postgres CHECK.
     max_message_chars: int = Field(default=2000, alias="MAX_MESSAGE_CHARS")
 
+    # Set to "production" on the deployed service. This API is internal and
+    # describes itself entirely through its schema, so /docs and /openapi.json
+    # hand a probing stranger the full request/response shape of an endpoint
+    # that is only supposed to be reachable by the Next.js server.
+    environment: str = Field(default="development", alias="ENVIRONMENT")
+
+    @property
+    def docs_enabled(self) -> bool:
+        return self.environment != "production"
+
     @field_validator("allowed_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:

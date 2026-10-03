@@ -1,0 +1,24 @@
+# Deployment root is backend/. Vercel honours .vercelignore in place of
+# .gitignore, so this list has to be complete on its own.
+#
+# .env holds the real API_TOKEN and .env.local the VERCEL_OIDC_TOKEN that
+# `vercel link` writes. Neither may reach the upload bundle; the token is set as
+# a Vercel environment variable instead. .env.example is deliberately not
+# excluded, it contains no secrets.
+.env
+.env.local
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+.coverage
+htmlcov/
+tests/
+Dockerfile
+README.md
+requirements-dev.txt
+pyproject.toml

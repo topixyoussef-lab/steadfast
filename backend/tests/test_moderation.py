@@ -212,6 +212,115 @@ async def test_self_harm_is_critical(settings: Settings) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Arabic coverage
+#
+# The community is Arabic-first. Before these terms existed every message below
+# scored "allow", including a suicide statement, so the English suite passing
+# said nothing about whether the deployed service could read its own users.
+# ---------------------------------------------------------------------------
+ARABIC_DISCLOSURES = [
+    "أنا مدمن إباحية وبحاول أبطل",
+    "انتكست امبارح بعد ١٢ يوم",
+    "الشهوة صعبة جدا النهاردة",
+    "بطلت العادة السرية من تلاتين يوم",
+    "كنت بتفرج على إباحي وأنا صغير",
+    "ادمنت الأفلام الإباحية وعايز أتعالج",
+    "محفزاتي النهاردة الصلاة والصيام",
+    "نفسي أرجع نظيف تاني، ادعولي",
+    "أنا حاسس بخجل وذنب بعد الانتكاسة",
+    "ساعدوني، الوحدة بتوحش بالليل",
+]
+
+ARABIC_MUST_BLOCK = [
+    "أموت نفسي",
+    "روح موت نفسك يا فاشل",
+    "طريقة الانتحار إيه",
+    "يا ابن الكلب",
+    "يا شرموطة",
+    "كل الناس بتتفرج على الإباحية",
+    "ضيفني على تليجرام هبعترك صور",
+    "كازينو أونلاين رهان مضمون",
+    "عايز أفلام إباحية، رابط موقع إباحي",
+]
+
+
+async def test_arabic_recovery_disclosures_are_never_blocked(settings: Settings) -> None:
+    for text in ARABIC_DISCLOSURES:
+        result = await moderate(text, settings)
+        assert result["decision"] != "block", (
+            f"Blocked an Arabic recovery disclosure: {text!r} -> {result}"
+        )
+
+
+async def test_arabic_attacks_are_blocked(settings: Settings) -> None:
+    for text in ARABIC_MUST_BLOCK:
+        result = await moderate(text, settings)
+        assert result["decision"] == "block", (
+            f"Failed to block: {text!r} -> {result}"
+        )
+
+
+async def test_arabic_self_harm_is_critical(settings: Settings) -> None:
+    result = await moderate("أموت نفسي", settings)
+    assert result["decision"] == "block"
+    assert result["severity"] == "critical"
+
+
+async def test_arabic_spelling_variance_still_matches(settings: Settings) -> None:
+    """Hamza and the round-ta are optional when typing, not when matching."""
+    for text in ["الإباحية عادية", "الاباحية عاديه", "الاباحية عادية"]:
+        result = await moderate(text, settings)
+        assert result["decision"] == "block", f"{text!r} -> {result}"
+
+
+async def test_arabic_punctuation_does_not_defeat_a_match(settings: Settings) -> None:
+    """The observed production message, with and without its punctuation."""
+    for text in ["يا كلب", "يا كلب؟", "يا كلب، انت واحد كلب"]:
+        result = await moderate(text, settings)
+        assert result["decision"] == "flag", f"{text!r} -> {result}"
+        assert "harassment" in result["categories"]
+
+
+async def test_arabic_insult_flags_while_slur_blocks(settings: Settings) -> None:
+    """An insult reaches a moderator; a slur does not get posted at all."""
+    insult = await moderate("يا غبي", settings)
+    assert insult["decision"] == "flag"
+    slur = await moderate("يا ابن الكلب", settings)
+    assert slur["decision"] == "block"
+
+
+async def test_arabic_acquisition_in_crisis_is_flagged_not_blocked(
+    settings: Settings,
+) -> None:
+    """Same rescue rule as English: this person needs a human, not a wall."""
+    result = await moderate("انتكست امبارح وعايز أفلام إباحية", settings)
+    assert result["decision"] == "flag", f"Should reach a moderator: {result}"
+
+
+async def test_arabic_encouragement_is_never_rescued(settings: Settings) -> None:
+    """A recovery frame cannot rescue a message aimed at other people."""
+    result = await moderate("أنا بطلت، بس كل الناس بتتفرج عادي", settings)
+    assert result["decision"] == "block", f"{result}"
+
+
+async def test_arabic_offplatform_mention_is_flagged(settings: Settings) -> None:
+    result = await moderate("حد عنده جروب واتساب", settings)
+    assert result["decision"] == "flag"
+    assert "offplatform" in result["categories"]
+
+
+async def test_ordinary_arabic_chat_passes(settings: Settings) -> None:
+    for text in [
+        "صباح الخير يا جماعة، يوم سابع",
+        "حد يعرف ميكانيكي كويس في القاهرة؟",
+        "شكرا على الرد، ده ساعدني فعلا",
+        "كلبنا نام جنبى طول الليل",
+    ]:
+        result = await moderate(text, settings)
+        assert result["decision"] in {"allow", "flag"}, f"Wrongly held: {text!r} -> {result}"
+
+
+# ---------------------------------------------------------------------------
 # Structural guarantees
 # ---------------------------------------------------------------------------
 def test_no_recovery_word_is_also_a_block_term() -> None:
@@ -235,7 +344,7 @@ def test_every_term_declares_a_known_category() -> None:
     known = {
         "explicit", "solicitation", "encouragement",
         "gambling", "self_harm", "self_hostility",
-        "scam", "offplatform",
+        "scam", "offplatform", "harassment",
     }
     for term in [*BLOCK_TERMS, *FLAG_TERMS]:
         assert term.category in known, f"{term.pattern} -> {term.category}"

@@ -29,6 +29,9 @@ app = FastAPI(
         "panic button responder. Internal API: requires X-API-Token."
     ),
     lifespan=lifespan,
+    docs_url="/docs" if settings.docs_enabled else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if settings.docs_enabled else None,
 )
 
 app.add_middleware(
