@@ -1,10 +1,8 @@
 import type { Metadata } from "next";
 
-import { AuthForm } from "@/components/auth/auth-form";
 import { PasskeySignIn } from "@/components/auth/passkey-signin";
 import { FormError } from "@/components/ui/field";
 import { getDictionary } from "@/lib/i18n/server";
-import { passkeyTablesReady } from "@/lib/webauthn-server";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -31,25 +29,10 @@ export default async function LoginPage({
       ? (notices[errorKey] ?? null)
       : undefined;
 
-  // Only lead with the fingerprint once the passkey tables actually exist.
-  // Otherwise the page renders exactly as it did before this feature shipped,
-  // so deploying can never make signing in harder for anyone.
-  const passkeyReady = await passkeyTablesReady();
-
-  if (!passkeyReady) {
-    return (
-      <AuthForm
-        mode="login"
-        next={next}
-        email={email}
-        notice={notice ?? undefined}
-      />
-    );
-  }
-
-  // Fingerprint-only. The password form is not offered as a link: it reveals
-  // itself on its own the moment an address turns out to have no fingerprint yet,
-  // which is the single bootstrap step needed to enrol the first one.
+  // Fingerprint-only, unconditionally. No migration gate: if the passkey tables
+  // are not there yet, beginPasskeySignIn reports "no fingerprint enrolled" and the
+  // password form reveals itself, which is a clearer answer than hiding the whole
+  // feature behind a table the user has to go and create by hand.
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
