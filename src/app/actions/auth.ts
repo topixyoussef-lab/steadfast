@@ -4,34 +4,20 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { createClient } from "@/lib/supabase/server";
 import { getDictionary } from "@/lib/i18n/server";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
+import { countryByIso, normalizePhone, phoneToAuthEmail } from "@/lib/phone";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 
 export type AuthFormState = {
   error?: string;
   notice?: string;
-  /**
-   * Set when the password was correct but the account has a fingerprint enrolled.
-   * The client reads the sensor and resubmits with passkeyAssertion.
-   */
-  passkeyRequired?: boolean;
-  passkeyChallengeId?: string;
-  passkeyOptions?: unknown;
   fieldErrors?: {
-    email?: string[];
+    phone?: string[];
     password?: string[];
     displayName?: string[];
   };
 };
-
-function emailSchemaFor(dict: Dictionary) {
-  return z
-    .string()
-    .trim()
-    .min(1, dict.errors.emailRequired)
-    .email(dict.errors.emailInvalid);
-}
 
 function passwordSchemaFor(dict: Dictionary) {
   return z
@@ -39,6 +25,28 @@ function passwordSchemaFor(dict: Dictionary) {
     .min(1, dict.errors.passwordRequired)
     .min(8, dict.errors.passwordShort)
     .max(72, dict.errors.passwordLong);
+}
+
+/**
+ * Reads the phone from the form. The UI posts the picked country as an ISO code
+ * and the national number separately, so the two are joined here rather than in
+ * the client, where a bad join could not be reported back per-field.
+ */
+function phoneFromForm(
+  formData: FormData,
+  dict: Dictionary,
+): { phone: string } | { error: string; fieldErrors: { phone: string[] } } {
+  const country = countryByIso(String(formData.get("country") ?? ""));
+  const national = normalizePhone(country.dial, String(formData.get("phone") ?? ""));
+
+  if (!national) {
+    return {
+      error: dict.errors.phoneInvalid,
+      fieldErrors: { phone: [dict.errors.phoneInvalid] },
+    };
+  }
+
+  return { phone: national };
 }
 
 function safeNext(next: string | undefined) {
@@ -49,16 +57,20 @@ function safeNext(next: string | undefined) {
   return next;
 }
 
+function nextTarget(formData: FormData) {
+  return safeNext((formData.get("next") as string | null) ?? undefined);
+}
+
 function messageFromAuthError(message: string, dict: Dictionary): string {
   const lower = message.toLowerCase();
   const e = dict.errors;
   if (lower.includes("invalid login")) return e.invalidCredentials;
-  if (lower.includes("already registered")) return e.emailRegistered;
-  if (lower.includes("password should be")) return e.passwordShort;
-  if (lower.includes("email not confirmed")) return e.emailNotConfirmed;
-  if (lower.includes("rate limit") || lower.includes("too many")) {
-    return e.rateLimited;
+  if (lower.includes("already registered") || lower.includes("already been registered")) {
+    return e.phoneRegistered;
   }
+  if (lower.includes("phone") && lower.includes("registered")) return e.phoneRegistered;
+  if (lower.includes("password should be")) return e.passwordShort;
+  if (lower.includes("rate limit") || lower.includes("too many")) return e.rateLimited;
   return e.generic;
 }
 
@@ -67,23 +79,22 @@ export async function signIn(
   formData: FormData,
 ): Promise<AuthFormState> {
   const dict = await getDictionary();
-  const email = emailSchemaFor(dict).safeParse(formData.get("email"));
-  const password = passwordSchemaFor(dict).safeParse(formData.get("password"));
 
-  if (!email.success || !password.success) {
+  const phone = phoneFromForm(formData, dict);
+  if ("error" in phone) return { error: phone.error, fieldErrors: phone.fieldErrors };
+
+  const password = passwordSchemaFor(dict).safeParse(formData.get("password"));
+  if (!password.success) {
     return {
-      fieldErrors: {
-        email: email.success ? undefined : email.error.issues.map((i) => i.message),
-        password: password.success
-          ? undefined
-          : password.error.issues.map((i) => i.message),
-      },
+      fieldErrors: { password: password.error.issues.map((i) => i.message) },
     };
   }
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({
-    email: email.data,
+    // The account is keyed on the synthetic address derived from the phone
+    // number; the number itself lives in auth.users.phone and public.profiles.
+    email: phoneToAuthEmail(phone.phone),
     password: password.data,
   });
 
@@ -91,12 +102,12 @@ export async function signIn(
     return { error: messageFromAuthError(error.message, dict) };
   }
 
-  // Plain password sign-in. This is the bootstrap and recovery path: it is the
-  // only way to reach /settings and enrol a fingerprint in the first place, and
-  // the way back in if every enrolled device is lost. The everyday route is the
-  // fingerprint-only flow in src/app/actions/passkey.ts.
+  // Plain password sign-in is the bootstrap and recovery path: it is the only
+  // way to reach /settings and enrol a first fingerprint, and the way back in
+  // when every enrolled device is lost. Day-to-day sign-in is the fingerprint
+  // flow in src/app/actions/passkey.ts.
   revalidatePath("/", "layout");
-  redirect(safeNext(formData.get("next") as string | null ?? undefined));
+  redirect(nextTarget(formData));
 }
 
 export async function signUp(
@@ -113,73 +124,55 @@ export async function signUp(
     .max(60, e.displayNameShort)
     .safeParse(formData.get("displayName") ?? "");
 
-  const email = emailSchemaFor(dict).safeParse(formData.get("email"));
+  const phone = phoneFromForm(formData, dict);
   const password = passwordSchemaFor(dict)
     .regex(/[a-zA-Z]/, e.passwordNeedsLetter)
     .regex(/[0-9]/, e.passwordNeedsNumber)
     .safeParse(formData.get("password"));
 
-  if (!displayName.success || !email.success || !password.success) {
+  if (!displayName.success || "error" in phone || !password.success) {
     return {
       fieldErrors: {
-        email: email.success ? undefined : email.error.issues.map((i) => i.message),
-        password: password.success
-          ? undefined
-          : password.error.issues.map((i) => i.message),
+        phone: "error" in phone ? phone.fieldErrors.phone : undefined,
+        password: password.success ? undefined : password.error.issues.map((i) => i.message),
         displayName: displayName.success
           ? undefined
           : displayName.error.issues.map((i) => i.message),
       },
+      ...("error" in phone ? { error: phone.error } : {}),
     };
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signUp({
-    email: email.data,
+  // Created through the service role rather than auth.signUp. Signup cannot
+  // require an email confirmation, because there is no inbox to receive it: the
+  // address is synthetic, so the confirmation link would be unreachable and
+  // registration would dead-end. Confirming at creation time is what makes a
+  // phone-only account possible at all.
+  const admin = await createServiceRoleClient();
+  const { error: createError } = await admin.auth.admin.createUser({
+    email: phoneToAuthEmail(phone.phone),
+    phone: phone.phone,
     password: password.data,
-    options: {
-      data: { full_name: displayName.data },
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001"}/auth/callback`,
-    },
+    email_confirm: true,
+    user_metadata: { full_name: displayName.data },
   });
 
-  if (error) {
-    return { error: messageFromAuthError(error.message, dict) };
+  if (createError) {
+    return { error: messageFromAuthError(createError.message, dict) };
   }
 
-  // Email confirmation is enabled: no session yet, so send them to login with
-  // the address prefilled. Note that Supabase reports an existing address as a
-  // successful signup to avoid leaking which emails have accounts, so this page
-  // is reached both after a real registration and after a duplicate attempt.
-  if (data.session === null) {
-    revalidatePath("/", "layout");
-    redirect(`/login?registered=1&email=${encodeURIComponent(email.data)}`);
+  const supabase = await createClient();
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: phoneToAuthEmail(phone.phone),
+    password: password.data,
+  });
+
+  if (signInError) {
+    return { error: messageFromAuthError(signInError.message, dict) };
   }
 
   revalidatePath("/", "layout");
-  redirect(safeNext(formData.get("next") as string | null ?? undefined));
-}
-
-export async function signInWithGoogle(formData: FormData) {
-  const supabase = await createClient();
-  const next = safeNext(formData.get("next") as string | null ?? undefined);
-
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001"}/auth/callback?next=${encodeURIComponent(next)}`,
-      queryParams: {
-        access_type: "offline",
-        prompt: "consent",
-      },
-    },
-  });
-
-  if (error || !data.url) {
-    redirect("/login?error=oauth");
-  }
-
-  redirect(data.url);
+  redirect(nextTarget(formData));
 }
 
 export async function signOut() {
@@ -187,41 +180,6 @@ export async function signOut() {
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/");
-}
-
-function siteUrl() {
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
-}
-
-/**
- * Sends a password-reset email.
- *
- * The response is deliberately identical whether or not the address has an
- * account, so this endpoint cannot be used to discover registered emails.
- */
-export async function requestPasswordReset(
-  _prev: AuthFormState,
-  formData: FormData,
-): Promise<AuthFormState> {
-  const dict = await getDictionary();
-  const email = emailSchemaFor(dict).safeParse(formData.get("email"));
-
-  if (!email.success) {
-    return { fieldErrors: { email: email.error.issues.map((i) => i.message) } };
-  }
-
-  const supabase = await createClient();
-  const { error } = await supabase.auth.resetPasswordForEmail(email.data, {
-    // Lands on /auth/reset, which exchanges the code for a session and then
-    // forwards to the page that actually collects the new password.
-    redirectTo: `${siteUrl()}/auth/reset`,
-  });
-
-  if (error) {
-    return { error: dict.errors.generic };
-  }
-
-  return { notice: dict.auth.resetSentNotice };
 }
 
 export async function updatePassword(
@@ -236,9 +194,7 @@ export async function updatePassword(
 
   if (!password.success) {
     return {
-      fieldErrors: {
-        password: password.error.issues.map((i) => i.message),
-      },
+      fieldErrors: { password: password.error.issues.map((i) => i.message) },
     };
   }
 
@@ -248,19 +204,67 @@ export async function updatePassword(
     error: userError,
   } = await supabase.auth.getUser();
 
-  // No recovery session: the link was expired or already used.
   if (userError || !user) {
-    return { error: dict.auth.noticeCallback };
+    return { error: dict.errors.generic };
   }
 
-  const { error } = await supabase.auth.updateUser({
-    password: password.data,
-  });
+  const { error } = await supabase.auth.updateUser({ password: password.data });
 
   if (error) {
     return { error: messageFromAuthError(error.message, dict) };
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  redirect("/settings");
+}
+
+/**
+ * Staff password reset.
+ *
+ * There is no self-service recovery: the account has no email, so there is no
+ * inbox to send a reset link to and no SMS provider configured. Losing the
+ * fingerprint and the password means an admin sets a new password here.
+ */
+export async function adminResetPassword(
+  _prev: AuthFormState,
+  formData: FormData,
+): Promise<AuthFormState> {
+  const dict = await getDictionary();
+
+  const userId = z
+    .string()
+    .uuid(dict.errors.generic)
+    .safeParse(formData.get("userId"));
+  const password = passwordSchemaFor(dict)
+    .regex(/[a-zA-Z]/, dict.errors.passwordNeedsLetter)
+    .regex(/[0-9]/, dict.errors.passwordNeedsNumber)
+    .safeParse(formData.get("password"));
+
+  if (!userId.success || !password.success) {
+    return { error: dict.errors.generic };
+  }
+
+  const admin = await createServiceRoleClient();
+
+  // Authorize before mutating anything. get_admin_members raises 'forbidden'
+  // unless private.is_admin() is true, so a clean call is the authorization.
+  // It also picks up the trigger in 0003 that keys roles on the phone allowlist.
+  const { error: authzError } = await admin.rpc("get_admin_members", { p_limit: 1 });
+
+  if (authzError) {
+    return { error: dict.errors.generic };
+  }
+
+  const { error: updateError } = await admin.auth.admin.updateUserById(userId.data, {
+    password: password.data,
+  });
+
+  if (updateError) {
+    return { error: messageFromAuthError(updateError.message, dict) };
+  }
+
+  // A new password invalidates nothing else, but the member may be mid-session
+  // with the old one; the admin UI says so rather than forcing it silently.
+  revalidatePath("/", "layout");
+  return { notice: dict.admin.user.passwordReset };
 }

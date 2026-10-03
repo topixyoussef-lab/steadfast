@@ -12,22 +12,11 @@ export default async function LoginPage({
   const [params, dict] = await Promise.all([searchParams, getDictionary()]);
   const next = typeof params.next === "string" ? params.next : undefined;
   const errorKey = typeof params.error === "string" ? params.error : undefined;
-  const registered = params.registered === "1";
-  // Carried over from signup so the form arrives with the address already
+  // Carried over from signup so the form arrives with the number already
   // filled in and the only thing left to do is the password.
-  const email = typeof params.email === "string" ? params.email : undefined;
+  const phone = typeof params.phone === "string" ? params.phone : undefined;
 
-  const notices: Record<string, string> = {
-    registered: dict.auth.noticeRegistered,
-    oauth: dict.auth.noticeOauth,
-    callback: dict.auth.noticeCallback,
-  };
-
-  const notice = registered
-    ? notices.registered
-    : errorKey
-      ? (notices[errorKey] ?? null)
-      : undefined;
+  const notice = errorKey ? (dict.auth.noticeCallback ?? null) : null;
 
   // Fingerprint-only, unconditionally. No migration gate: if the passkey tables
   // are not there yet, beginPasskeySignIn reports "no fingerprint enrolled" and the
@@ -44,7 +33,7 @@ export default async function LoginPage({
 
       {notice ? <FormError message={notice} /> : null}
 
-      <PasskeySignIn next={next} defaultEmail={email} />
+      <PasskeySignIn next={next} defaultPhone={phone} />
     </div>
   );
 }

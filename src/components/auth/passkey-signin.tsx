@@ -7,8 +7,9 @@ import {
   completePasskeySignIn,
 } from "@/app/actions/passkey";
 import { AuthForm } from "@/components/auth/auth-form";
+import { PhoneField } from "@/components/auth/phone-field";
 import { useI18n } from "@/components/i18n-provider";
-import { Field, FormError } from "@/components/ui/field";
+import { FormError } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { FingerprintIcon } from "@/components/icons";
 import { assertPasskey, webauthnAvailable } from "@/lib/passkey-client";
@@ -20,16 +21,16 @@ function noopSubscribe() {
 /**
  * Passwordless sign-in.
  *
- * Step 1 posts the email and gets back a WebAuthn challenge bound to that user.
+ * Step 1 posts the phone number and gets back a WebAuthn challenge bound to that user.
  * Step 2 reads the fingerprint and posts the assertion, which the server turns
  * into a Supabase session. No password is involved at any point.
  */
 export function PasskeySignIn({
   next,
-  defaultEmail,
+  defaultPhone,
 }: {
   next?: string;
-  defaultEmail?: string;
+  defaultPhone?: string;
 }) {
   const { dict } = useI18n();
   const t = dict.auth;
@@ -106,7 +107,7 @@ export function PasskeySignIn({
         <p className="rounded-2xl border border-dashed p-4 text-center text-sm text-muted">
           {t.passkeyUnsupported}
         </p>
-        <AuthForm mode="login" next={next} email={defaultEmail} />
+        <AuthForm mode="login" next={next} phone={defaultPhone} />
       </div>
     );
   }
@@ -116,15 +117,7 @@ export function PasskeySignIn({
       <form action={formAction} className="flex flex-col gap-4">
         {next ? <input type="hidden" name="next" value={next} /> : null}
 
-        <Field
-          label={t.emailLabel}
-          name="email"
-          type="email"
-          placeholder={t.emailPlaceholder}
-          autoComplete="email"
-          defaultValue={defaultEmail}
-          required
-        />
+        <PhoneField defaultPhone={defaultPhone} />
 
         <SubmitButton pendingLabel={t.passkeyReading}>
           <FingerprintIcon className="h-5 w-5" />
@@ -153,7 +146,7 @@ export function PasskeySignIn({
       {state.passkeyMissing ? (
         <>
           <FormError message={state.error} />
-          <AuthForm mode="login" next={next} email={defaultEmail} />
+          <AuthForm mode="login" next={next} phone={defaultPhone} />
         </>
       ) : null}
     </div>

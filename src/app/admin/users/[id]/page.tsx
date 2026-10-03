@@ -23,6 +23,7 @@ import {
   urgeLabel,
 } from "@/lib/format";
 import { interpolate } from "@/lib/i18n/interpolate";
+import { authEmailToPhone, formatPhone } from "@/lib/phone";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { Locale } from "@/lib/i18n/config";
 import { getDictionary, getLocale } from "@/lib/i18n/server";
@@ -69,6 +70,8 @@ export default async function AdminUserPage({
   const p = dossier.profile;
   const u = dict.admin.user;
   const dash = u.notAvailable;
+  const memberPhone =
+    formatPhone(dossier.auth.phone ?? p.phone ?? authEmailToPhone(p.email)) || dash;
 
   return (
     <main className="flex w-full flex-col gap-5 px-4 py-6 lg:px-8 lg:py-8">
@@ -88,21 +91,21 @@ export default async function AdminUserPage({
           <Section title={u.account}>
             <FieldList>
               <Field
-                label={u.email}
+                label={u.phone}
                 value={
                   <span className="flex flex-wrap items-center justify-end gap-1.5">
-                    <span className="break-all">{p.email ?? dash}</span>
-                    {dossier.auth.email_confirmed_at ? (
-                      <Badge tone="good">{u.emailConfirmed}</Badge>
-                    ) : (
-                      <Badge tone="warning">{u.emailNotConfirmed}</Badge>
-                    )}
+                    <span className="break-all">{memberPhone}</span>
+                    {dossier.auth.phone_confirmed_at ? (
+                      <Badge tone="good">{u.phoneConfirmed}</Badge>
+                    ) : memberPhone !== dash ? (
+                      <Badge tone="warning">{u.phoneNotConfirmed}</Badge>
+                    ) : null}
                   </span>
                 }
               />
               <Field
-                label={u.confirmedOn}
-                value={formatDate(dossier.auth.email_confirmed_at, locale)}
+                label={u.authAccountCreated}
+                value={formatDate(dossier.auth.created_at, locale, true)}
               />
               <Field
                 label={u.lastSignIn}
@@ -112,16 +115,17 @@ export default async function AdminUserPage({
                     : u.neverSignedIn
                 }
               />
+              <Field
+                label={u.phoneConfirmedOn}
+                value={formatDate(dossier.auth.phone_confirmed_at, locale, true)}
+              />
               <Field label={u.memberSince} value={formatDate(p.created_at, locale)} />
               <Field label={u.profileUpdated} value={formatDate(p.updated_at, locale, true)} />
               <Field label={u.signInMethod} value={dossier.auth.provider ?? dash} />
-              <Field label={u.phone} value={dossier.auth.phone ?? dash} />
               {dossier.auth.banned_until && (
                 <Field
-                  label={u.emailNotConfirmed}
-                  value={interpolate(u.bannedUntil, {
-                    date: formatDate(dossier.auth.banned_until, locale, true),
-                  })}
+                  label={u.bannedUntilLabel}
+                  value={formatDate(dossier.auth.banned_until, locale, true)}
                 />
               )}
             </FieldList>

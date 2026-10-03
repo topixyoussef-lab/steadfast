@@ -59,14 +59,14 @@ $$;
 revoke all on function private.prune_webauthn_challenges() from public, anon, authenticated;
 grant execute on function private.prune_webauthn_challenges() to service_role;
 
--- Resolves an email to a user id so passwordless sign-in can bind a WebAuthn
+-- Resolves a phone number to a user id so passwordless sign-in can bind a WebAuthn
 -- challenge to a real account before any credential is checked.
 --
 -- Lives in `public` because PostgREST only exposes that schema for RPC, and it is
 -- callable ONLY by service_role: the callers in src/app/actions/passkey.ts already
 -- proved possession of an enrolled private key, so this lookup never turns into a
 -- general account-enumeration endpoint.
-create or replace function public.passkey_user_id_for_email(p_email text)
+create or replace function public.passkey_user_id_for_phone(p_phone text)
 returns uuid
 language sql
 stable
@@ -75,9 +75,9 @@ set search_path = ''
 as $$
   select u.id
   from auth.users u
-  where lower(u.email) = lower(p_email)
+  where private.normalize_phone(u.phone) = private.normalize_phone(p_phone)
   limit 1;
 $$;
 
-revoke all on function public.passkey_user_id_for_email(text) from public, anon, authenticated;
-grant execute on function public.passkey_user_id_for_email(text) to service_role;
+revoke all on function public.passkey_user_id_for_phone(text) from public, anon, authenticated;
+grant execute on function public.passkey_user_id_for_phone(text) to service_role;

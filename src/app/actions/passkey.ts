@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { countryByIso, normalizePhone, normalizePhoneLoose } from "@/lib/phone";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getDictionary } from "@/lib/i18n/server";
 import {
@@ -58,7 +59,7 @@ export type PasskeyState = {
   passkeyChallengeId?: string;
   passkeyOptions?: unknown;
   /**
-   * The address has no fingerprint enrolled. The login page uses this to reveal
+   * The number has no fingerprint enrolled. The login page uses this to reveal
    * the password form, which is the one-time way to enrol the first fingerprint.
    */
   passkeyMissing?: boolean;
@@ -68,7 +69,7 @@ export type PasskeyState = {
  * Starts a passwordless sign-in.
  *
  * Step one of two. The challenge is bound to the resolved user id, so the second
- * step never has to trust an email coming back from the browser.
+ * step never has to trust a phone number coming back from the browser.
  */
 export async function beginPasskeySignIn(
   _prev: PasskeyState,
@@ -76,20 +77,16 @@ export async function beginPasskeySignIn(
 ): Promise<PasskeyState> {
   const dict = await getDictionary();
 
-  const email = z
-    .string()
-    .trim()
-    .min(1, dict.errors.emailRequired)
-    .email(dict.errors.emailInvalid)
-    .safeParse(formData.get("email"));
+  const country = countryByIso(String(formData.get("country") ?? ""));
+  const phone = normalizePhone(country.dial, String(formData.get("phone") ?? ""));
 
-  if (!email.success) {
-    return { error: email.error.issues[0]?.message ?? dict.errors.emailInvalid };
+  if (!phone) {
+    return { passkeyMissing: true, error: dict.errors.phoneInvalid };
   }
 
   const admin = await createServiceRoleClient();
-  const { data, error } = await admin.rpc("passkey_user_id_for_email", {
-    p_email: email.data,
+  const { data, error } = await admin.rpc("passkey_user_id_for_phone", {
+    p_phone: phone,
   });
   const userId = typeof data === "string" ? data : null;
 
@@ -160,7 +157,7 @@ export async function completePasskeySignIn(
 
 async function currentUser(): Promise<{
   id: string;
-  email: string;
+  phone: string;
   displayName: string;
 } | null> {
   const supabase = await createClient();
@@ -169,11 +166,11 @@ async function currentUser(): Promise<{
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const email = user.email ?? `${user.id}@passkey.local`;
+  const phone = normalizePhoneLoose(user.phone) ?? "";
   const displayName =
-    (user.user_metadata?.full_name as string | undefined) || email.split("@")[0];
+    (user.user_metadata?.full_name as string | undefined) || phone || "Member";
 
-  return { id: user.id, email, displayName };
+  return { id: user.id, phone, displayName };
 }
 
 /** Issues registration options for the signed-in user. */
@@ -200,7 +197,7 @@ export async function beginPasskeyEnrollment(): Promise<
     rpName: "Steadfast",
     rpID,
     userID: await webauthnUserHandle(account.id),
-    userName: account.email,
+    userName: account.phone || account.displayName,
     userDisplayName: account.displayName,
     // No attestation: platform authenticators (Windows Hello, Touch ID) give no
     // meaningful attestation and requesting it breaks enrollment outright.

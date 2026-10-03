@@ -6,6 +6,7 @@ export type Profile = {
   id: string;
   role: UserRole;
   email: string | null;
+  phone: string | null;
   display_name: string | null;
   avatar_url: string | null;
   preference_type: PreferenceType | null;

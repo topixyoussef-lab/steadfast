@@ -25,7 +25,11 @@ param(
   [string]$ProjectRef,
 
   # Migrations to apply, in order.
-  [string[]]$Migrations = @("0003_admin_dossier.sql", "0004_webauthn_passkeys.sql")
+  [string[]]$Migrations = @(
+    "0003_phone_identity.sql",
+    "0004_admin_dossier.sql",
+    "0005_webauthn_passkeys.sql"
+  )
 )
 
 $ErrorActionPreference = "Stop"
@@ -102,7 +106,12 @@ $verifySql = @"
 select
   'webauthn_credentials=' || case when to_regclass('public.webauthn_credentials') is null then 'MISSING' else 'present' end,
   'webauthn_challenges=' || case when to_regclass('public.webauthn_challenges') is null then 'MISSING' else 'present' end,
-  'passkey_rpc='      || case when to_regproc('public.passkey_user_id_for_email') is null then 'MISSING' else 'present' end,
+  'normalize_phone='   || case when to_regproc('private.normalize_phone') is null then 'MISSING' else 'present' end,
+  'profiles_phone='    || case when exists (
+                                select 1 from information_schema.columns
+                                 where table_schema = 'public' and table_name = 'profiles' and column_name = 'phone'
+                              ) then 'present' else 'MISSING' end,
+  'passkey_rpc='       || case when to_regproc('public.passkey_user_id_for_phone') is null then 'MISSING' else 'present' end,
   'admin_dossier_rpc='|| case when to_regproc('public.get_admin_user_detail') is null then 'MISSING' else 'present' end;
 "@
 

@@ -8,11 +8,9 @@ import type { Profile } from "@/lib/types";
 /** Mirrors the jsonb returned by get_admin_user_detail(). */
 export type AuthFacts = {
   last_sign_in_at: string | null;
-  email_confirmed_at: string | null;
-  confirmation_sent_at: string | null;
-  recovery_sent_at: string | null;
-  new_email: string | null;
   phone: string | null;
+  created_at: string | null;
+  phone_confirmed_at: string | null;
   provider: string | null;
   banned_until: string | null;
 };

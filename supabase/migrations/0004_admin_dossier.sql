@@ -42,16 +42,14 @@ begin
   end if;
 
   -- Auth-side facts that have no column on public.profiles: sign-in recency,
-  -- confirmation state, provider, and whether the identity is currently
-  -- banned. Reading auth.users from here is safe because the guard above has
-  -- already run.
+  -- Identity is the phone number. The confirmation/recovery timestamps that
+  -- used to be reported here are email-delivery bookkeeping and are always null
+  -- for phone accounts, so they are gone rather than shown as broken.
   select jsonb_build_object(
     'last_sign_in_at',      u.last_sign_in_at,
-    'email_confirmed_at',   u.email_confirmed_at,
-    'confirmation_sent_at', u.confirmation_sent_at,
-    'recovery_sent_at',     u.recovery_sent_at,
-    'new_email',            u.new_email,
     'phone',                u.phone,
+    'created_at',           u.created_at,
+    'phone_confirmed_at',   u.phone_confirmed_at,
     'provider',             u.raw_app_meta_data ->> 'provider',
     'banned_until',         u.banned_until
   )
