@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Secrets. .env.example is the only file that belongs in git.
+.env
+.env.*
+!.env.example
+
+# Coverage
+.coverage
+htmlcov/

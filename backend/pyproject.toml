@@ -1,0 +1,13 @@
+[project]
+name = "steadfast-backend"
+version = "0.1.0"
+description = "Async moderation and panic-response service for Steadfast"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["error::DeprecationWarning:app.*"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

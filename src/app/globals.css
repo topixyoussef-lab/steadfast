@@ -1,26 +1,108 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --canvas: #07090f;
+  --surface: #0e1219;
+  --surface-raised: #151b25;
+  --surface-sunken: #0a0d13;
+  --border: #1e2634;
+  --border-strong: #2c3648;
+  --text: #e8ecf3;
+  --text-muted: #8b97ab;
+  --text-faint: #5c6779;
+  --accent: #4ade80;
+  --accent-strong: #22c55e;
+  --accent-contrast: #04140a;
+  --accent-soft: #4ade8022;
+  --danger: #f87171;
+  --danger-soft: #f8717118;
+  --warning: #fbbf24;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: light) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --canvas: #f7f8fa;
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    --surface-sunken: #eef1f5;
+    --border: #e2e6ec;
+    --border-strong: #cbd3de;
+    --text: #0d1420;
+    --text-muted: #5a6474;
+    --text-faint: #8b95a5;
+    --accent: #16a34a;
+    --accent-strong: #15803d;
+    --accent-contrast: #ffffff;
+    --accent-soft: #16a34a14;
+    --danger: #dc2626;
+    --danger-soft: #dc262614;
+    --warning: #d97706;
   }
 }
 
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-raised);
+  --color-sunken: var(--surface-sunken);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--text);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  /* Geist first so Latin stays in Geist; its font-face carries a latin-only
+     unicode-range, so Arabic falls through to Cairo's arabic subset. */
+  --font-sans: var(--font-geist-sans), var(--font-cairo), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--canvas);
+  color: var(--text);
+  overscroll-behavior-y: none;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@utility safe-b {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+@utility safe-t {
+  padding-top: max(1rem, env(safe-area-inset-top));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

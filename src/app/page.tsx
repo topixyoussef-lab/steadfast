@@ -1,69 +1,116 @@
-import Image from "next/image";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { BrandMark } from "@/components/ui/brand-mark";
+import { getProfile, getUser } from "@/lib/dal";
+import { getDictionary } from "@/lib/i18n/server";
+import { PREFERENCES } from "@/lib/preferences";
+
+export const metadata: Metadata = {
+  title: "Steadfast — replace the habit, keep the streak",
+};
+
+export default async function LandingPage() {
+  const [user, dict] = await Promise.all([getUser(), getDictionary()]);
+  if (user) {
+    const profile = await getProfile();
+    redirect(profile?.onboarding_done ? "/dashboard" : "/onboarding");
+  }
+
+  const t = dict.landing;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
+    <main className="flex min-h-dvh flex-col safe-t">
+      <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 py-4">
+        <div className="flex items-center gap-2.5">
+          <BrandMark className="h-8 w-8" />
+          <span className="text-lg font-semibold tracking-tight">
+            {dict.common.appName}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <LanguageSwitcher />
+          <Link
+            href="/login"
+            className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-surface"
+          >
+            {dict.nav.signIn}
+          </Link>
+          <Link
+            href="/signup"
+            className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-contrast hover:bg-accent-strong"
+          >
+            {dict.nav.start}
+          </Link>
+        </div>
+      </header>
+
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-16 px-5 py-10">
+        <section className="flex flex-col gap-6">
+          <h1 className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
+            {t.heroLine1}
+            <br />
+            {t.heroLine2}
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="max-w-xl text-lg leading-relaxed text-muted">
+            {t.heroBody}
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/signup"
+              className="inline-flex h-12 items-center rounded-xl bg-accent px-6 text-base font-semibold text-accent-contrast hover:bg-accent-strong"
+            >
+              {t.createAccount}
+            </Link>
+            <Link
+              href="/login"
+              className="inline-flex h-12 items-center rounded-xl border border-line bg-surface px-6 text-base font-medium hover:border-line-strong"
+            >
+              {t.haveAccount}
+            </Link>
+          </div>
+        </section>
+
+        <section className="grid gap-4 sm:grid-cols-2">
+          {PREFERENCES.map((pref) => (
+            <article
+              key={pref.id}
+              className="flex flex-col gap-2 rounded-2xl border bg-surface p-5 shadow-sm"
+            >
+              <h2 className="text-base font-semibold">{pref.label(dict)}</h2>
+              <p className="text-sm text-muted">{pref.tagline(dict)}</p>
+              <p className="text-sm leading-relaxed text-ink/90">
+                {pref.description(dict)}
+              </p>
+            </article>
+          ))}
+          <article className="flex flex-col gap-2 rounded-2xl border border-dashed bg-surface/50 p-5">
+            <h2 className="text-base font-semibold text-muted">
+              {t.comingNext}
+            </h2>
+            <p className="text-sm text-muted">{t.comingNextBody}</p>
+          </article>
+        </section>
+
+        <section className="grid gap-4 sm:grid-cols-3">
+          {[
+            [t.featureTasksTitle, t.featureTasksBody],
+            [t.featureStreaksTitle, t.featureStreaksBody],
+            [t.featureSafetyTitle, t.featureSafetyBody],
+          ].map(([title, body]) => (
+            <div key={title} className="flex flex-col gap-1.5">
+              <h3 className="text-sm font-semibold">{title}</h3>
+              <p className="text-sm leading-relaxed text-muted">{body}</p>
+            </div>
+          ))}
+        </section>
+      </div>
+
+      <footer className="safe-b mx-auto w-full max-w-3xl px-5 pb-6 text-xs leading-relaxed text-faint">
+        {t.footer}
+      </footer>
+    </main>
   );
 }
