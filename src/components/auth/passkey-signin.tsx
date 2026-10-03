@@ -40,12 +40,18 @@ export function PasskeySignIn({
   const awaited = useRef<string | null>(null);
 
   // A client-side capability, not application state: useSyncExternalStore reads it
-  // without a render-cascading effect and keeps the server snapshot false so the
-  // first client render matches the markup React sent.
+  // without a render-cascading effect.
+  //
+  // The server snapshot is deliberately optimistic (true) so the fingerprint UI
+  // is what the server sends. Rendering the password form on the server and
+  // swapping it for the fingerprint after hydration meant the page looked
+  // unchanged until JavaScript ran, and looked broken when it did not.
+  // A device that genuinely lacks WebAuthn still falls back to the password
+  // form, because getSnapshot() reports false there.
   const supported = useSyncExternalStore(
     noopSubscribe,
     () => webauthnAvailable(),
-    () => false,
+    () => true,
   );
 
   const challengeId = state.passkeyChallengeId;
