@@ -6,6 +6,7 @@ import {
   beginPasskeySignIn,
   completePasskeySignIn,
 } from "@/app/actions/passkey";
+import { AuthForm } from "@/components/auth/auth-form";
 import { useI18n } from "@/components/i18n-provider";
 import { Field, FormError } from "@/components/ui/field";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -34,7 +35,6 @@ export function PasskeySignIn({
   const t = dict.auth;
 
   const [state, formAction, pending] = useActionState(beginPasskeySignIn, {});
-  const [assertion, setAssertion] = useState<string | null>(null);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const awaited = useRef<string | null>(null);
@@ -70,10 +70,9 @@ export function PasskeySignIn({
         const result = await assertPasskey(state.passkeyOptions);
         if (cancelled) return;
 
-        setAssertion(result);
         setScanning(false);
 
-        // Let React commit the state, then hand the assertion to the server.
+        // Hand the assertion straight to the server; it mints the session.
         requestAnimationFrame(() => {
           void completePasskeySignIn(challengeId, result, next);
         });
@@ -97,14 +96,17 @@ export function PasskeySignIn({
 
   if (!supported) {
     return (
-      <p className="rounded-2xl border border-dashed p-4 text-center text-sm text-muted">
-        {t.passkeyUnsupported}
-      </p>
+      <div className="flex flex-col gap-6">
+        <p className="rounded-2xl border border-dashed p-4 text-center text-sm text-muted">
+          {t.passkeyUnsupported}
+        </p>
+        <AuthForm mode="login" next={next} email={defaultEmail} />
+      </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <form action={formAction} className="flex flex-col gap-4">
         {next ? <input type="hidden" name="next" value={next} /> : null}
 
@@ -136,10 +138,17 @@ export function PasskeySignIn({
       ) : null}
 
       {passkeyError ? <FormError message={passkeyError} /> : null}
-      {state.error ? <FormError message={state.error} /> : null}
+      {state.error && !state.passkeyMissing ? (
+        <FormError message={state.error} />
+      ) : null}
 
-      {assertion ? (
-        <input type="hidden" name="passkeyAssertion" value={assertion} readOnly />
+      {/* Nothing to enrol a fingerprint with yet, so the password form appears
+          here exactly once. Every later visit is fingerprint-only. */}
+      {state.passkeyMissing ? (
+        <>
+          <FormError message={state.error} />
+          <AuthForm mode="login" next={next} email={defaultEmail} />
+        </>
       ) : null}
     </div>
   );

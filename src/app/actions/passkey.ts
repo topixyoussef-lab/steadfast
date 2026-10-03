@@ -57,6 +57,11 @@ export type PasskeyState = {
   passkeyRequired?: boolean;
   passkeyChallengeId?: string;
   passkeyOptions?: unknown;
+  /**
+   * The address has no fingerprint enrolled. The login page uses this to reveal
+   * the password form, which is the one-time way to enrol the first fingerprint.
+   */
+  passkeyMissing?: boolean;
 };
 
 /**
@@ -91,12 +96,12 @@ export async function beginPasskeySignIn(
   // One message for "no such account" and "no passkey enrolled": distinguishing
   // them would turn this form into an account-enumeration oracle.
   if (error || !userId) {
-    return { error: dict.auth.passkeyNotEnrolled };
+    return { passkeyMissing: true, error: dict.auth.passkeyNotEnrolled };
   }
 
   const pending = await beginAssertion(userId);
   if (!pending) {
-    return { error: dict.auth.passkeyNotEnrolled };
+    return { passkeyMissing: true, error: dict.auth.passkeyNotEnrolled };
   }
 
   return {
