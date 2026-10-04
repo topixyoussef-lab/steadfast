@@ -305,6 +305,8 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
     cancelEdit: "Cancel edit",
     edited: "edited",
     confirmDelete: "Delete this message? This cannot be undone.",
+    confirmDeleteByStaff:
+      "This is another member's message. Hide it from the room for everyone?",
     react: "React",
     reactFailed: "Could not update the reaction. Try again.",
     editFailed: "Could not save your edit. Try again.",
@@ -1065,6 +1067,8 @@ const ar: Dictionary = {
     cancelEdit: "إلغاء التعديل",
     edited: "معدّلة",
     confirmDelete: "تحذف الرسالة دي؟ لا يمكن الرجوع بعد الحذف.",
+    confirmDeleteByStaff:
+      "دي رسالة من عضو تاني. إخفاؤها من الغرفة عند الجميع؟",
     react: "تفاعل",
     reactFailed: "تعذّر تحديث التفاعل. جرّب مرة تانية.",
     editFailed: "تعذّر حفظ التعديل. جرّب مرة تانية.",

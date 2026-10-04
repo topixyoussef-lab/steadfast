@@ -342,6 +342,11 @@ export function MessageThread({
   // roles with the service role and hands the ids over.
   const staffSet = useMemo(() => new Set(staffIds), [staffIds]);
 
+  // Staff may hide anyone's message, so the delete action also appears on other
+  // people's bubbles. The route re-checks the role on every request; this only
+  // decides what to show.
+  const amStaff = staffSet.has(currentUserId);
+
   const reactionGroups = useMemo(() => {
     const map = new Map<string, ReactionGroup[]>();
     for (const reaction of reactions) {
@@ -381,13 +386,20 @@ export function MessageThread({
   }
 
   async function deleteMessage(message: ChatMessage) {
-    if (!window.confirm(dict.community.confirmDelete)) return;
+    // A member removing their own message and a moderator removing someone
+    // else's are different decisions, so they ask differently.
+    const bySomeoneElse = message.user_id !== currentUserId;
+    const confirmText = bySomeoneElse
+      ? dict.community.confirmDeleteByStaff
+      : dict.community.confirmDelete;
+
+    if (!window.confirm(confirmText)) return;
 
     setActionError(null);
 
-    // The live database rejects member writes to chat_messages, so the soft
-    // delete goes through the server route, which checks ownership and
-    // stamps deleted_at with the service role.
+    // The live database rejects member writes to chat_messages, so removing a
+    // message goes through the server route, which re-checks that the caller is
+    // either the author or staff and stamps deleted_at with the service role.
     const response = await fetch(`/api/messages/${message.id}`, {
       method: "DELETE",
     });
@@ -650,7 +662,7 @@ export function MessageThread({
                       </button>
                     )}
 
-                    {mine && (
+                    {(mine || amStaff) && (
                       <button
                         type="button"
                         onClick={() => void deleteMessage(message)}
