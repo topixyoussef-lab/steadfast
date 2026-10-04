@@ -9,7 +9,10 @@ import { interpolate } from "@/lib/i18n/interpolate";
 import { getDictionary, getLocale } from "@/lib/i18n/server";
 import type { Notification } from "@/lib/types";
 
-export const metadata = { title: "Notifications — Steadfast" };
+export async function generateMetadata() {
+  const dict = await getDictionary();
+  return { title: dict.notifications.title };
+}
 
 export default async function NotificationsPage() {
   await requireProfile();

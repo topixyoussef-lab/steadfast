@@ -72,6 +72,17 @@ _HOMOGLYPHS = {
 # "يا، كلب" stops matching a "يا كلب" pattern.
 _SEPARATORS = re.compile(r"[\s._\-*+~`'\"^|/\\\u0609-\u060c\u061b\u061f\u066a-\u066d]+")
 _NON_ALNUM = re.compile(r"[^0-9a-z\u0600-\u06ff]+")
+
+# A masking character is evidence, not punctuation. A separator *between*
+# letters can be dropped ("ك_لب" still reads "كلب"), but "*" in "كل*" *replaces*
+# a letter: deleting it like a separator erases the only sign that "كلب" was
+# hidden and leaves the harmless word "كل" behind. normalize_masked() swaps
+# masking characters for a sentinel that survives both removal passes, so the
+# matcher can still tell that something was hidden. The sentinel is a control
+# character, so nobody types one by accident.
+MASK_SENTINEL = "\u0001"
+_MASK_CHARS = ("*", "\u066d")  # asterisk, Arabic five-pointed star
+_NON_ALNUM_MASKED = re.compile(r"[^0-9a-z\u0600-\u06ff\x01]+")
 _REPEATS = re.compile(r"(.)\1{2,}")
 _REPEATS_ALL = re.compile(r"(.)\1+")
 _URL = re.compile(
@@ -80,15 +91,13 @@ _URL = re.compile(
 )
 
 
-def normalize(text: str) -> str:
-    """Fold text down to a canonical lowercase form.
+def _fold(text: str) -> str:
+    """The prefix every normaliser shares: invisibles, diacritics, Arabic
+    letter variants, lookalikes, leetspeak.
 
-    Strips invisible characters and diacritics, converts lookalikes and
-    leetspeak, then removes separators and collapses repeated letters.
+    The callers differ about separators (and masking characters), so those
+    passes stay out of here.
     """
-    if not text:
-        return ""
-
     out = unicodedata.normalize("NFKC", text)
     out = _INVISIBLE.sub("", out)
     out = out.replace(_ARABIC_TATWEEL, "")
@@ -105,14 +114,42 @@ def normalize(text: str) -> str:
 
     out = out.casefold()
     out = out.translate(_LEET)
+    return out
+
+
+def normalize(text: str) -> str:
+    """Fold text down to a canonical lowercase form.
+
+    Strips invisible characters and diacritics, converts lookalikes and
+    leetspeak, then removes separators and collapses repeated letters.
+    """
+    if not text:
+        return ""
 
     # "p.o.r.n" / "p o r n" / "p-o-r-n" all collapse to "porn".
-    out = _SEPARATORS.sub("", out)
+    out = _SEPARATORS.sub("", _fold(text))
     out = _NON_ALNUM.sub("", out)
 
     # "poooorn" -> "poorn" -> still fine, but bound the run length.
-    out = _REPEATS.sub(r"\1\1", out)
-    return out
+    return _REPEATS.sub(r"\1\1", out)
+
+
+def normalize_masked(text: str) -> str:
+    """normalize(), except masking characters survive as MASK_SENTINEL.
+
+    Both forms are needed. normalize() erases the star in "يا ابن كل*" and
+    with it the evidence; this one keeps the star so the matcher can tell the
+    deliberately hidden word apart from the innocent word left behind.
+    """
+    if not text:
+        return ""
+
+    out = _fold(text)
+    for ch in _MASK_CHARS:
+        out = out.replace(ch, MASK_SENTINEL)
+    out = _SEPARATORS.sub("", out)
+    out = _NON_ALNUM_MASKED.sub("", out)
+    return _REPEATS.sub(r"\1\1", out)
 
 
 def squeeze(text: str) -> str:

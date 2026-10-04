@@ -3,7 +3,10 @@ import { MemberDirectory } from "@/components/admin/member-directory";
 import { createClient } from "@/lib/supabase/server";
 import { getDictionary } from "@/lib/i18n/server";
 
-export const metadata = { title: "Members — Steadfast Console" };
+export async function generateMetadata() {
+  const dict = await getDictionary();
+  return { title: dict.console.members };
+}
 
 export default async function AdminMembersPage() {
   await requireStaff();

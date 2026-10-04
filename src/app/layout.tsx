@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Cairo, Geist, Geist_Mono } from "next/font/google";
 
 import { I18nProvider } from "@/components/i18n-provider";
+import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { htmlLang } from "@/lib/i18n/config";
 import { getDictionary, getDirection, getLocale } from "@/lib/i18n/server";
 
@@ -23,23 +24,25 @@ const cairo = Cairo({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "Steadfast",
-    template: "%s · Steadfast",
-  },
-  description:
-    "Replace the habit, keep the streak. A recovery platform with daily tasks, a moderated community and paid micro-work.",
-  applicationName: "Steadfast",
-  appleWebApp: {
-    capable: true,
-    title: "Steadfast",
-    statusBarStyle: "black-translucent",
-  },
-  formatDetection: {
-    telephone: false,
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const dict = await getDictionary();
+  return {
+    title: {
+      default: dict.common.appName,
+      template: `%s · ${dict.common.appName}`,
+    },
+    description: dict.landing.heroBody,
+    applicationName: dict.common.appName,
+    appleWebApp: {
+      capable: true,
+      title: dict.common.appName,
+      statusBarStyle: "black-translucent",
+    },
+    formatDetection: {
+      telephone: false,
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: [
@@ -74,6 +77,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         suppressHydrationWarning
       >
         <I18nProvider dict={dict} locale={locale}>
+          <ServiceWorkerRegister />
           {children}
         </I18nProvider>
       </body>

@@ -186,3 +186,47 @@ export async function liftSuspensionAction(input: { userId: string }) {
   revalidatePath("/admin");
   return { ok: true };
 }
+
+const roleSchema = z.object({
+  userId: z.string().uuid(),
+  role: z.enum(["user", "admin"]),
+});
+
+/**
+ * Grant or revoke the admin role.
+ *
+ * Gated to `admin`, not staff: moderators get the console but not the ability
+ * to hand out privileges. A member cannot change their own role either, so the
+ * last admin can never demote themselves out of the console by accident. The
+ * write still runs on the user client, so if profiles_admin_all were ever
+ * mis-scoped this fails closed rather than bypassing it.
+ */
+export async function setMemberRoleAction(input: {
+  userId: string;
+  role: "user" | "admin";
+}): Promise<{ ok: boolean; error?: string }> {
+  const parsed = roleSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid role" };
+
+  const staff = await requireStaff();
+  if (staff.role !== "admin") {
+    return { ok: false, error: "Only admins can change roles" };
+  }
+  if (staff.id === parsed.data.userId) {
+    return { ok: false, error: "You cannot change your own role" };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ role: parsed.data.role })
+    .eq("id", parsed.data.userId)
+    .select("id");
+
+  if (error) return { ok: false, error: error.message };
+  if (didNotApply(data)) return { ok: false, error: "That member could not be updated" };
+
+  revalidatePath("/admin/members");
+  revalidatePath(`/admin/users/${parsed.data.userId}`);
+  return { ok: true };
+}

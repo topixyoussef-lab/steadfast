@@ -3,7 +3,10 @@ import Link from "next/link";
 
 import { getDictionary } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Password recovery" };
+export async function generateMetadata(): Promise<Metadata> {
+  const dict = await getDictionary();
+  return { title: dict.auth.recoveryTitle };
+}
 
 // There is no reset form here, and that is deliberate. Steadfast stores no email
 // address, so there is no inbox to send a link to, and no SMS provider is

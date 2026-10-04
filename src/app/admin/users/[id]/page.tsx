@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { SuspensionActions } from "@/components/admin/admin-actions";
+import { RoleActions, SuspensionActions } from "@/components/admin/admin-actions";
 import {
   Badge,
   EmptyNote,
@@ -14,11 +14,20 @@ import { BackIcon } from "@/components/icons";
 import { getUserDossier, type Dossier } from "@/lib/admin-dal";
 import { requireStaff } from "@/lib/dal";
 import {
+  alertSeverityLabel,
+  alertSourceLabel,
+  alertStatusLabel,
+  applicationStatusLabel,
   categoryLabel,
   formatDate,
+  formatMoney,
   jobStatusLabel,
+  moderationStatusLabel,
   moodLabel,
+  notificationTypeLabel,
+  providerLabel,
   relativeTime,
+  roleLabel,
   stageLabel,
   urgeLabel,
 } from "@/lib/format";
@@ -28,7 +37,10 @@ import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { Locale } from "@/lib/i18n/config";
 import { getDictionary, getLocale } from "@/lib/i18n/server";
 
-export const metadata = { title: "Member — Steadfast Console" };
+export async function generateMetadata() {
+  const dict = await getDictionary();
+  return { title: dict.common.member };
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -81,7 +93,7 @@ export default async function AdminUserPage({
         <h1 className="min-w-0 truncate text-2xl font-semibold tracking-tight">
           {p.display_name ?? dict.admin.unnamed}
         </h1>
-        {p.role !== "user" && <Badge tone="accent">{p.role}</Badge>}
+        {p.role !== "user" && <Badge tone="accent">{roleLabel(p.role, dict)}</Badge>}
         {dossier.is_suspended && <Badge tone="danger">{dict.admin.suspendedBadge}</Badge>}
       </header>
 
@@ -121,7 +133,12 @@ export default async function AdminUserPage({
               />
               <Field label={u.memberSince} value={formatDate(p.created_at, locale)} />
               <Field label={u.profileUpdated} value={formatDate(p.updated_at, locale, true)} />
-              <Field label={u.signInMethod} value={dossier.auth.provider ?? dash} />
+              <Field
+                label={u.signInMethod}
+                value={
+                  dossier.auth.provider ? providerLabel(dossier.auth.provider, dict) : dash
+                }
+              />
               {dossier.auth.banned_until && (
                 <Field
                   label={u.bannedUntilLabel}
@@ -134,7 +151,7 @@ export default async function AdminUserPage({
           <Section title={u.profile}>
             <FieldList>
               <Field label={u.displayName} value={p.display_name ?? dash} />
-              <Field label={dict.admin.role} value={<Badge>{p.role}</Badge>} />
+              <Field label={dict.admin.role} value={<Badge>{roleLabel(p.role, dict)}</Badge>} />
               <Field
                 label={u.background}
                 value={
@@ -147,7 +164,7 @@ export default async function AdminUserPage({
               <Field label={u.timezone} value={p.timezone} />
               <Field
                 label={u.dayCutoff}
-                value={interpolate(u.latencyMs, { n: p.day_cutoff_hour })}
+                value={interpolate(u.dayCutoffValue, { n: p.day_cutoff_hour })}
               />
               <Field
                 label={u.weeklyGoal}
@@ -178,7 +195,10 @@ export default async function AdminUserPage({
           </Section>
 
           <Section title={dict.admin.role}>
-            <SuspensionActions userId={p.id} suspended={dossier.is_suspended} />
+            <div className="flex flex-col gap-3">
+              <RoleActions userId={p.id} role={p.role} />
+              <SuspensionActions userId={p.id} suspended={dossier.is_suspended} />
+            </div>
           </Section>
         </div>
 
@@ -362,13 +382,13 @@ function SosHistory({
                         : "neutral"
                   }
                 >
-                  {row.severity}
+                  {alertSeverityLabel(row.severity, dict)}
                 </Badge>
                 <Badge tone={row.status === "open" ? "warning" : "neutral"}>
-                  {row.status}
+                  {alertStatusLabel(row.status, dict)}
                 </Badge>
                 <span className="text-xs text-faint">
-                  {u.source}: {row.source} · {row.day_key}
+                  {u.source}: {alertSourceLabel(row.source, dict)} · {row.day_key}
                 </span>
                 <time className="ms-auto text-xs text-faint" dateTime={row.created_at}>
                   {relativeTime(row.created_at, dict, locale)}
@@ -433,7 +453,7 @@ function ChatHistory({
                         : "good"
                   }
                 >
-                  {row.moderation_status}
+                  {moderationStatusLabel(row.moderation_status, dict)}
                 </Badge>
                 {row.is_flagged_by_ai && <Badge tone="warning">{u.aiChecked}</Badge>}
                 {row.deleted_at && <Badge tone="neutral">{dict.admin.remove}</Badge>}
@@ -477,9 +497,9 @@ function ModerationHistory({
                 <Badge
                   tone={row.status === "blocked" ? "danger" : "warning"}
                 >
-                  {row.status}
+                  {moderationStatusLabel(row.status, dict)}
                 </Badge>
-                <Badge tone="neutral">{row.severity}</Badge>
+                <Badge tone="neutral">{alertSeverityLabel(row.severity, dict)}</Badge>
                 {row.latency_ms !== null && (
                   <span className="text-xs text-faint">
                     {interpolate(u.latencyMs, { n: row.latency_ms })}
@@ -541,7 +561,8 @@ function JobsHistory({
                 </Badge>
                 {row.is_ai_clean && <Badge tone="good">{u.aiChecked}</Badge>}
                 <span>
-                  {u.price}: {row.price_minor / 100} {row.currency}
+                  {u.price}:{" "}
+                  {formatMoney(row.price_minor, row.currency, row.price_type, dict, locale)}
                 </span>
                 <span>
                   {u.applications}: {row.applications_count}
@@ -580,7 +601,7 @@ function ApplicationsHistory({
             >
               <span className="min-w-0 text-sm">{row.job_title}</span>
               <span className="flex shrink-0 items-center gap-2 text-xs text-faint">
-                <Badge tone="neutral">{row.status}</Badge>
+                <Badge tone="neutral">{applicationStatusLabel(row.status, dict)}</Badge>
                 <span>{formatDate(row.created_at, locale)}</span>
               </span>
             </li>
@@ -614,7 +635,9 @@ function NotificationHistory({
               className="flex flex-wrap items-baseline justify-between gap-2 py-2"
             >
               <span className="flex min-w-0 items-center gap-2">
-                <Badge tone={row.read_at ? "neutral" : "accent"}>{row.type}</Badge>
+                <Badge tone={row.read_at ? "neutral" : "accent"}>
+                  {notificationTypeLabel(row.type, dict)}
+                </Badge>
                 <span className="truncate text-sm">{row.title}</span>
               </span>
               <time className="shrink-0 text-xs text-faint" dateTime={row.created_at}>

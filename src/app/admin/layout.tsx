@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 
@@ -6,6 +7,18 @@ import { BackIcon } from "@/components/icons";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { requireStaff } from "@/lib/dal";
 import { getDictionary } from "@/lib/i18n/server";
+import { authEmailToPhone, formatPhone } from "@/lib/phone";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const dict = await getDictionary();
+  return {
+    title: {
+      default: dict.console.title,
+      template: `%s · ${dict.console.title}`,
+    },
+    robots: { index: false, follow: false },
+  };
+}
 
 /**
  * Chrome for the staff console.
@@ -29,7 +42,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             <p className="truncate text-sm font-semibold tracking-tight">
               {dict.console.title}
             </p>
-            <p className="truncate text-[11px] text-faint">{staff.email}</p>
+            <p dir="ltr" className="truncate text-[11px] text-faint">
+              {formatPhone(authEmailToPhone(staff.email)) || staff.email}
+            </p>
           </div>
         </div>
 

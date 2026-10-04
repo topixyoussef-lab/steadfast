@@ -321,6 +321,75 @@ async def test_ordinary_arabic_chat_passes(settings: Settings) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Masked slurs
+#
+# "انت ابن كل*" hides a letter behind a star. Plain normalisation deletes the
+# star and leaves the harmless word "كل", so before the mask pass every message
+# below read as innocent. Deleting a masking character is not the same as
+# deleting punctuation: the star stands where a letter should be.
+# ---------------------------------------------------------------------------
+MASKED_MUST_BLOCK = [
+    "انت ابن كل*",
+    "انت ابن ك*ب",
+    "انت ابن الكل*",
+    "انت ابن ك***",
+    "ابن كل*",
+    "يا ابن الكل*",
+]
+
+UNMASKED_MUST_BLOCK = [
+    "انت ابن كلب",
+    "هو ابن الكلب ده",
+    "بنت الكلب",
+]
+
+
+async def test_masked_slurs_are_blocked(settings: Settings) -> None:
+    for text in MASKED_MUST_BLOCK:
+        result = await moderate(text, settings)
+        assert result["decision"] == "block", f"{text!r} -> {result}"
+        assert "harassment" in result["categories"], f"{text!r} -> {result}"
+
+
+async def test_unmasked_slur_variants_are_blocked(settings: Settings) -> None:
+    for text in UNMASKED_MUST_BLOCK:
+        result = await moderate(text, settings)
+        assert result["decision"] == "block", f"{text!r} -> {result}"
+
+
+async def test_masked_insult_flags_while_masked_slur_blocks(
+    settings: Settings,
+) -> None:
+    insult = await moderate("يا كل*", settings)
+    assert insult["decision"] == "flag", f"{insult}"
+    assert "harassment" in insult["categories"]
+
+
+async def test_emphasis_stars_are_not_masks(settings: Settings) -> None:
+    """A star between letters is never evidence on its own.
+
+    The mask pass only fires when the rest of the slur's letters are all
+    present, so ordinary star usage must stay clean.
+    """
+    for text in [
+        "شكرا *ملاحظة* مهمة",
+        "كلبنا نام جنبى *طول* الليل",
+        "***",
+        "كل حاجة تمام",
+    ]:
+        result = await moderate(text, settings)
+        assert result["decision"] != "block", f"Wrongly blocked: {text!r} -> {result}"
+
+
+async def test_masked_acquisition_in_crisis_is_still_rescued(
+    settings: Settings,
+) -> None:
+    """Masking a disclosure letter must not defeat the rescue."""
+    result = await moderate("انتك*ت امبارح وعايز أفلام إباحية", settings)
+    assert result["decision"] == "flag", f"Should reach a moderator: {result}"
+
+
+# ---------------------------------------------------------------------------
 # Structural guarantees
 # ---------------------------------------------------------------------------
 def test_no_recovery_word_is_also_a_block_term() -> None:
@@ -354,4 +423,4 @@ def test_every_term_declares_a_known_category() -> None:
 def test_short_patterns_are_dropped_at_load() -> None:
     from app.moderation.engine import _BLOCK_PATTERNS
 
-    assert all(len(p) >= 4 for p, _ in _BLOCK_PATTERNS)
+    assert all(len(p.text) >= 4 for p in _BLOCK_PATTERNS)

@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.steadfast.twa",
+      "sha256_cert_fingerprints": [
+        "7251FCD0285DEF2682C3D99AFAC8E856E585DA2DB4E2A34CDEFF95533E223F41"
+      ]
+    }
+  }
+]

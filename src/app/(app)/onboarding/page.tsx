@@ -5,7 +5,10 @@ import { getProfile } from "@/lib/dal";
 import { OnboardingForm } from "@/components/onboarding/onboarding-form";
 import { getDictionary } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Onboarding" };
+export async function generateMetadata(): Promise<Metadata> {
+  const dict = await getDictionary();
+  return { title: dict.onboarding.title };
+}
 
 export default async function OnboardingPage() {
   const dict = await getDictionary();

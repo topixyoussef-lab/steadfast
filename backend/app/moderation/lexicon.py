@@ -235,6 +235,13 @@ ENGLISH_RECOVERY_SAFE: list[str] = [
 # ---------------------------------------------------------------------------
 HARASSMENT_TERMS: list[Term] = [
     Term("يا ابن الكلب", "harassment", "block"),
+    # The same slur without the vocative, which is how it is usually typed
+    # ("انت ابن كلب"). These read as "son of a dog" in ordinary speech; the
+    # engine's mask pass is what turns them into "انت ابن كل*" as well.
+    Term("ابن الكلب", "harassment", "block"),
+    Term("ابن كلب", "harassment", "block"),
+    Term("بنت الكلب", "harassment", "block"),
+    Term("بنت كلب", "harassment", "block"),
     Term("يا شرموط", "harassment", "block"),
     Term("شرموطة", "harassment", "block"),
     Term("يا عاهرة", "harassment", "block"),

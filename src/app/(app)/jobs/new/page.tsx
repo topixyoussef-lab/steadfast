@@ -7,7 +7,10 @@ import { getDictionary } from "@/lib/i18n/server";
 import { jobCategoryLabel } from "@/lib/format";
 import type { JobCategory } from "@/lib/types";
 
-export const metadata = { title: "Post a job — Steadfast" };
+export async function generateMetadata() {
+  const dict = await getDictionary();
+  return { title: dict.jobs.newTitle };
+}
 
 export default async function NewJobPage() {
   await requireOnboarded();

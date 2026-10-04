@@ -60,6 +60,16 @@ export type ChatMessage = {
   moderation_status: "allowed" | "flagged" | "blocked";
   reply_to: string | null;
   created_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
+};
+
+export type MessageReaction = {
+  id: string;
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
 };
 
 export type JobCategory = {
@@ -127,5 +137,4 @@ export type PanicAlert = {
   severity: "critical" | "warning" | "info";
   acknowledged_at: string | null;
   created_at: string;
-  member_name: string | null;
 };

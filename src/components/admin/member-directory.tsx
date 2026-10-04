@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import { ChevronIcon, SearchIcon } from "@/components/icons";
 import { cn } from "@/lib/cn";
+import { roleLabel } from "@/lib/format";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { authEmailToPhone, formatPhone } from "@/lib/phone";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
@@ -106,7 +107,7 @@ export function MemberDirectory({
                 </div>
 
                 <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
-                  {member.role !== "user" && <Badge>{member.role}</Badge>}
+                  {member.role !== "user" && <Badge>{roleLabel(member.role, dict)}</Badge>}
                   {member.is_suspended && (
                     <Badge tone="danger">{dict.admin.suspendedBadge}</Badge>
                   )}

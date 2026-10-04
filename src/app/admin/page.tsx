@@ -1,14 +1,25 @@
+import Link from "next/link";
+
 import { AlertActions } from "@/components/admin/admin-actions";
 import { Badge, EmptyNote, Section } from "@/components/admin/dossier-ui";
 import { requireStaff } from "@/lib/dal";
-import { panicLabel, relativeTime } from "@/lib/format";
+import {
+  alertSeverityLabel,
+  alertSourceLabel,
+  panicLabel,
+  relativeTime,
+} from "@/lib/format";
 import { cn } from "@/lib/cn";
+import { authEmailToPhone, formatPhone } from "@/lib/phone";
 import { createClient } from "@/lib/supabase/server";
 import { interpolate } from "@/lib/i18n/interpolate";
 import { getDictionary, getLocale } from "@/lib/i18n/server";
 import type { PanicAlert } from "@/lib/types";
 
-export const metadata = { title: "Overview — Steadfast Console" };
+export async function generateMetadata() {
+  const dict = await getDictionary();
+  return { title: { absolute: `${dict.console.overview} · ${dict.console.title}` } };
+}
 
 type Stats = {
   users: { total: number; active_7d: number; suspended: number };
@@ -38,6 +49,25 @@ export default async function AdminOverviewPage() {
     .eq("status", "open")
     .order("created_at", { ascending: false })
     .limit(25);
+
+  // One extra round trip labels the whole feed. Staff can read every profile,
+  // and selecting `email` (never `phone`) keeps this working both before and
+  // after 0003: for phone accounts the number is encoded in the synthetic
+  // auth address, which is where the directory reads it from too.
+  const senderIds = Array.from(
+    new Set(((alerts ?? []) as PanicAlert[]).map((row) => row.user_id)),
+  );
+  const senders = new Map<
+    string,
+    { id: string; display_name: string | null; email: string | null }
+  >();
+  if (senderIds.length > 0) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, display_name, email")
+      .in("id", senderIds);
+    for (const row of data ?? []) senders.set(row.id, row);
+  }
 
   const s = (stats ?? null) as Stats | null;
 
@@ -84,8 +114,10 @@ export default async function AdminOverviewPage() {
           <EmptyNote>{dict.admin.noOpenAlerts}</EmptyNote>
         ) : (
           <ul className="flex flex-col gap-2">
-            {(alerts ?? []).map((row) => {
-              const alert = row as PanicAlert;
+            {((alerts ?? []) as PanicAlert[]).map((alert) => {
+              const sender = senders.get(alert.user_id);
+              const phone = authEmailToPhone(sender?.email);
+              const shownPhone = phone ? formatPhone(phone) : "";
 
               return (
                 <li
@@ -101,7 +133,7 @@ export default async function AdminOverviewPage() {
                     <Badge
                       tone={alert.severity === "critical" ? "danger" : "warning"}
                     >
-                      {alert.severity}
+                      {alertSeverityLabel(alert.severity, dict)}
                     </Badge>
                     <span className="text-sm font-semibold">
                       {interpolate(dict.admin.urgeSummary, {
@@ -117,13 +149,40 @@ export default async function AdminOverviewPage() {
                     </time>
                   </div>
 
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/admin/users/${alert.user_id}`}
+                      className="text-sm font-semibold hover:text-accent"
+                    >
+                      {sender?.display_name ?? dict.admin.unnamed}
+                    </Link>
+                    {phone ? (
+                      <a
+                        href={`tel:${phone}`}
+                        dir="ltr"
+                        aria-label={interpolate(dict.admin.callMember, {
+                          phone: shownPhone,
+                        })}
+                        className="rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-semibold text-accent transition hover:bg-accent/20"
+                      >
+                        {shownPhone}
+                      </a>
+                    ) : (
+                      sender?.email && (
+                        <span dir="ltr" className="text-xs text-faint">
+                          {sender.email}
+                        </span>
+                      )
+                    )}
+                  </div>
+
                   {alert.message && (
                     <p className="text-sm leading-relaxed text-muted">{alert.message}</p>
                   )}
 
                   <p className="text-xs text-faint">
                     {interpolate(dict.admin.sourceAndDay, {
-                      source: alert.source,
+                      source: alertSourceLabel(alert.source, dict),
                       day: alert.day_key,
                     })}
                   </p>

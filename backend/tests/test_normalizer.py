@@ -1,9 +1,11 @@
 import pytest
 
 from app.moderation.normalizer import (
+    MASK_SENTINEL,
     char_ratio,
     find_urls,
     normalize,
+    normalize_masked,
     soft_normalize,
     squeeze,
 )
@@ -96,3 +98,25 @@ def test_normalize_keeps_one_repeat_squeeze_removes_all() -> None:
 
 def test_squeeze_empty() -> None:
     assert squeeze("") == ""
+
+
+def test_normalize_masked_keeps_the_star() -> None:
+    """The star replaces a letter, so it is evidence and must not be deleted."""
+    assert normalize("انت ابن كل*") == "انتابنكل"
+    assert normalize_masked("انت ابن كل*") == "انتابنكل" + MASK_SENTINEL
+
+
+def test_normalize_masked_collapses_star_runs_like_repeats() -> None:
+    assert normalize_masked("كل***") == "كل" + MASK_SENTINEL * 2
+    assert squeeze(normalize_masked("كل***")) == "كل" + MASK_SENTINEL
+
+
+def test_normalize_masked_keeps_the_arabic_star() -> None:
+    # U+066D sits inside \u0600-\u06ff and would otherwise be deleted as
+    # punctuation, silently turning a masked letter into a clean word.
+    assert normalize_masked("كل\u066d") == "كل" + MASK_SENTINEL
+
+
+def test_normalize_masked_equals_normalize_without_masks() -> None:
+    for text in ["يا ابن الكلب", "الإباحية عادية", "p.o.r.n", "p0rn"]:
+        assert normalize_masked(text) == normalize(text)

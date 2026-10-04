@@ -123,6 +123,12 @@ export function formatPhone(phone: string | null | undefined): string {
   const iso = guessCountry(canonical);
   const rest = canonical.slice(1 + iso.dial.length);
   const groups = rest.match(/.{1,3}/g) ?? [];
+  // A lone trailing digit reads as a typo ("+20 120 767 901 7"); fold it into
+  // the group before it so ten-digit numbers end 3-3-4, as they are dialled.
+  if (groups.length > 1 && groups[groups.length - 1].length === 1) {
+    const merged = `${groups[groups.length - 2]}${groups[groups.length - 1]}`;
+    groups.splice(groups.length - 2, 2, merged);
+  }
   return `+${iso.dial} ${groups.join(" ")}`.trim();
 }
 

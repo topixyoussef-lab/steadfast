@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/dal";
 import { moderateMessage } from "@/lib/python-client";
+import { logModeration } from "@/lib/moderation-log";
 
 const bodySchema = z.object({
   roomId: z.string().uuid("Unknown room"),
@@ -122,7 +123,12 @@ export async function POST(request: Request) {
       is_flagged_by_ai: verdict.decision === "flag",
       moderation_status: verdict.decision === "flag" ? "flagged" : "allowed",
     })
-    .select("id, created_at")
+    // The full row, not a hand-picked subset: the composer hands this
+    // straight to the thread as the optimistic message, so a partial row
+    // would render the sender's own message as someone else's bubble.
+    .select(
+      "id, room_id, user_id, content, is_flagged_by_ai, moderation_status, reply_to, created_at, edited_at, deleted_at",
+    )
     .single();
 
   if (insertError) {
@@ -142,46 +148,5 @@ export async function POST(request: Request) {
     requestId: verdict.request_id,
   });
 
-  return NextResponse.json({
-    ok: true,
-    message: {
-      id: message.id,
-      content,
-      created_at: message.created_at,
-      is_flagged_by_ai: verdict.decision === "flag",
-      moderation_status: verdict.decision === "flag" ? "flagged" : "allowed",
-    },
-  });
-}
-
-async function logModeration(entry: {
-  userId: string;
-  roomId?: string;
-  messageId?: string;
-  content: string;
-  status: "allowed" | "flagged" | "blocked";
-  severity: "info" | "warning" | "critical";
-  categories: string[];
-  matchedTerms?: string[];
-  reason?: string;
-  latencyMs?: number;
-  requestId?: string;
-}) {
-  try {
-    const admin = await createServiceRoleClient();
-    await admin.from("moderation_log").insert({
-      user_id: entry.userId,
-      room_id: entry.roomId ?? null,
-      message_id: entry.messageId ?? null,
-      content_preview: entry.content.slice(0, 300),
-      status: entry.status,
-      severity: entry.severity,
-      categories: entry.categories,
-      matched_terms: entry.matchedTerms ?? [],
-      latency_ms: entry.latencyMs ? Math.round(entry.latencyMs) : null,
-      request_id: entry.requestId ?? null,
-    });
-  } catch {
-    // Logging must never break the member's request.
-  }
+  return NextResponse.json({ ok: true, message });
 }

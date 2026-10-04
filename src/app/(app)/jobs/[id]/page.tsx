@@ -12,7 +12,10 @@ import { getDictionary, getLocale } from "@/lib/i18n/server";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import type { Job, JobApplication } from "@/lib/types";
 
-export const metadata = { title: "Job — Steadfast" };
+export async function generateMetadata() {
+  const dict = await getDictionary();
+  return { title: dict.jobs.title };
+}
 
 function jobTypeLabel(type: string, dict: Dictionary): string {
   const known = dict.jobTypes as Record<string, string | undefined>;

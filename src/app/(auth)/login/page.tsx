@@ -4,7 +4,10 @@ import { PasskeySignIn } from "@/components/auth/passkey-signin";
 import { FormError } from "@/components/ui/field";
 import { getDictionary } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Sign in" };
+export async function generateMetadata(): Promise<Metadata> {
+  const dict = await getDictionary();
+  return { title: dict.auth.loginTitle };
+}
 
 export default async function LoginPage({
   searchParams,

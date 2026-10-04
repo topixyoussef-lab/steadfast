@@ -12,14 +12,23 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import re
 import time
 from collections import OrderedDict
+from typing import NamedTuple
 
 import httpx
 
 from app.config import Settings
 from app.moderation.lexicon import BLOCK_TERMS, FLAG_TERMS, RECOVERY_SAFE, Term
-from app.moderation.normalizer import char_ratio, find_urls, normalize, squeeze
+from app.moderation.normalizer import (
+    MASK_SENTINEL,
+    char_ratio,
+    find_urls,
+    normalize,
+    normalize_masked,
+    squeeze,
+)
 
 # Patterns shorter than this cause more false positives than they catch.
 _MIN_PATTERN_LEN = 4
@@ -73,42 +82,75 @@ class _BoundedCache:
 _openai_cache = _BoundedCache()
 
 
-def _prepare(terms: list[Term]) -> list[tuple[str, str]]:
-    out: list[tuple[str, str]] = []
+class _Pattern(NamedTuple):
+    """A compiled term: the plain normalised form and the mask-tolerant regex."""
+
+    text: str
+    masked: re.Pattern[str]
+    category: str
+
+
+def _masked_regex(pattern: str) -> re.Pattern[str]:
+    """Compile a regex in which any one character may be a masking run.
+
+    "يا ابن كل*" normalises (with stars preserved) to "ياابنكل<mask>", so the
+    pattern's final letter has to be allowed to match a run of sentinels.
+    Each other character must still match itself, which is what keeps a bare
+    "كل" -- a real word -- from matching on its own.
+    """
+    return re.compile(
+        "".join(f"(?:{re.escape(c)}|{MASK_SENTINEL}+)" for c in pattern)
+    )
+
+
+def _prepare(terms: list[Term]) -> list[_Pattern]:
+    out: list[_Pattern] = []
     for term in terms:
         pattern = normalize(term.pattern)
         if len(pattern) >= _MIN_PATTERN_LEN:
-            out.append((pattern, term.category))
+            out.append(_Pattern(pattern, _masked_regex(pattern), term.category))
     return out
 
 
 _BLOCK_PATTERNS = _prepare(BLOCK_TERMS)
 _FLAG_PATTERNS = _prepare(FLAG_TERMS)
 _SAFE_PATTERNS = {normalize(w) for w in RECOVERY_SAFE if normalize(w)}
+_FRAME_PATTERNS = [(f, _masked_regex(f)) for f in _RECOVERY_FRAMES]
 
 
 def _match(
-    patterns: list[tuple[str, str]],
+    patterns: list[_Pattern],
     text: str,
     squeezed: str,
+    masked: str,
+    masked_squeezed: str,
 ) -> tuple[list[str], set[str]]:
-    """Match against the normalised text, then the squeezed text.
+    """Match against the normalised text and three evasions of it.
 
-    The second pass catches character-stuffing evasions that the primary
-    pass cannot see: "p o o o r n" normalises to "pooorn", which does not
-    contain "porn", but squeezing it does.
+    The squeeze pass catches character-stuffing ("p o o o r n" -> "pooorn" ->
+    "porn"); the masked forms catch a letter hidden behind "*", which plain
+    normalisation erases ("كل*" -> "كل").
     """
     hits: list[str] = []
     cats: set[str] = set()
-    for pattern, category in patterns:
-        if pattern in text or pattern in squeezed:
-            hits.append(pattern)
-            cats.add(category)
+    for pattern in patterns:
+        if (
+            pattern.text in text
+            or pattern.text in squeezed
+            or pattern.masked.search(masked)
+            or pattern.masked.search(masked_squeezed)
+        ):
+            hits.append(pattern.text)
+            cats.add(pattern.category)
     return hits, cats
 
 
-def _has_recovery_frame(text: str) -> bool:
-    return any(frame in text for frame in _RECOVERY_FRAMES)
+def _has_recovery_frame(text: str, masked: str) -> bool:
+    if any(frame in text for frame in _RECOVERY_FRAMES):
+        return True
+    # A member can mask a letter in their own disclosure too ("انتك*ت"), and a
+    # rescue that fails to fire is the one failure this engine must not have.
+    return any(rx.search(masked) for _, rx in _FRAME_PATTERNS)
 
 
 async def _openai_verdict(content: str, settings: Settings) -> dict | None:
@@ -153,9 +195,15 @@ async def moderate(content: str, settings: Settings) -> dict:
     started = time.perf_counter()
     text = normalize(content)
     squeezed = squeeze(text)
+    masked = normalize_masked(content)
+    masked_squeezed = squeeze(masked)
 
-    block_hits, block_cats = _match(_BLOCK_PATTERNS, text, squeezed)
-    flag_hits, flag_cats = _match(_FLAG_PATTERNS, text, squeezed)
+    block_hits, block_cats = _match(
+        _BLOCK_PATTERNS, text, squeezed, masked, masked_squeezed
+    )
+    flag_hits, flag_cats = _match(
+        _FLAG_PATTERNS, text, squeezed, masked, masked_squeezed
+    )
 
     decision = "allow"
     severity = "info"
@@ -163,7 +211,7 @@ async def moderate(content: str, settings: Settings) -> dict:
     matched: list[str] = []
 
     if block_hits:
-        rescuable = block_cats <= _RESCUABLE and _has_recovery_frame(text)
+        rescuable = block_cats <= _RESCUABLE and _has_recovery_frame(text, masked)
         if rescuable:
             decision = "flag"
             severity = "warning"

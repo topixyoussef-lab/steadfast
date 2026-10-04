@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useI18n } from "@/components/i18n-provider";
 import { cn } from "@/lib/cn";
@@ -8,6 +8,7 @@ import { interpolate } from "@/lib/i18n/interpolate";
 import type { ChatMessage } from "@/lib/types";
 
 const MAX = 2000;
+const EDIT_EXCERPT = 90;
 
 type Response = {
   ok?: boolean;
@@ -21,16 +22,48 @@ export function MessageComposer({
   roomId,
   replyTo,
   onClearReply,
+  editing,
+  onCancelEdit,
 }: {
   roomId: string;
   replyTo: { id: string; author: string; excerpt: string } | null;
   onClearReply: () => void;
+  editing: { id: string; content: string } | null;
+  onCancelEdit: () => void;
 }) {
   const { dict } = useI18n();
   const [content, setContent] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [prevEditingId, setPrevEditingId] = useState<string | null>(null);
+
+  // Entering edit mode loads the message into the composer; leaving it drops
+  // whatever was typed. Cancel and save both route through here, so the
+  // draft can never leak back into a fresh message. The state reset happens
+  // during render (guarded by the previous id) rather than in an effect, so
+  // there is no extra render pass.
+  const editingId = editing?.id ?? null;
+  if (editingId !== prevEditingId) {
+    setPrevEditingId(editingId);
+    setContent(editing?.content ?? "");
+    setError(null);
+  }
+
+  useEffect(() => {
+    if (editing) {
+      requestAnimationFrame(() => {
+        const el = textareaRef.current;
+        if (!el) return;
+        el.style.height = "auto";
+        el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+        el.focus();
+        el.setSelectionRange(el.value.length, el.value.length);
+      });
+    } else if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+  }, [editing]);
 
   async function send() {
     const text = content.trim();
@@ -40,31 +73,50 @@ export function MessageComposer({
     setError(null);
 
     try {
-      const response = await fetch("/api/moderate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roomId, content: text, replyTo: replyTo?.id ?? null }),
-      });
+      // An edit goes through the same gate as a post: the server re-runs
+      // moderation on the new text before the service role writes it.
+      const response = await fetch(
+        editing ? `/api/messages/${editing.id}` : "/api/moderate",
+        {
+          method: editing ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(
+            editing
+              ? { content: text }
+              : { roomId, content: text, replyTo: replyTo?.id ?? null },
+          ),
+        },
+      );
 
       const data: Response = await response.json().catch(() => ({}));
 
       if (!response.ok || !data.ok) {
-        setError(data.reason ?? data.error ?? dict.community.notPosted);
+        setError(
+          data.reason ??
+            data.error ??
+            (editing ? dict.community.editFailed : dict.community.notPosted),
+        );
         return;
       }
 
       setContent("");
-      onClearReply();
       if (textareaRef.current) textareaRef.current.style.height = "auto";
 
       // The realtime echo arrives on its own; adding the returned row keeps
       // the thread responsive when the socket is slow.
       if (data.message) {
         window.dispatchEvent(
-          new CustomEvent<ChatMessage>("steadfast:optimistic", {
-            detail: data.message,
-          }),
+          new CustomEvent<ChatMessage>(
+            editing ? "steadfast:message-updated" : "steadfast:optimistic",
+            { detail: data.message },
+          ),
         );
+      }
+
+      if (editing) {
+        onCancelEdit();
+      } else {
+        onClearReply();
       }
     } catch {
       setError(dict.community.sendNetworkFailed);
@@ -81,6 +133,27 @@ export function MessageComposer({
         <p role="alert" className="rounded-xl bg-danger-soft px-4 py-2.5 text-sm text-danger">
           {error}
         </p>
+      )}
+
+      {editing && (
+        <div className="flex items-start gap-3 rounded-xl border-s-2 border-accent bg-accent-soft/40 py-2 ps-3 pe-2">
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-[11px] font-medium text-accent">
+              {dict.community.editing}
+            </span>
+            <span className="truncate text-xs text-muted">
+              {editing.content.slice(0, EDIT_EXCERPT)}
+            </span>
+          </span>
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            aria-label={dict.community.cancelEdit}
+            className="shrink-0 rounded-lg px-2 py-1 text-xs text-muted transition hover:text-ink"
+          >
+            {dict.common.cancel}
+          </button>
+        </div>
       )}
 
       {replyTo && (
@@ -120,7 +193,13 @@ export function MessageComposer({
           }}
           rows={1}
           maxLength={MAX}
-          placeholder={replyTo ? dict.community.replying : dict.community.placeholder}
+          placeholder={
+            editing
+              ? dict.community.editing
+              : replyTo
+                ? dict.community.replying
+                : dict.community.placeholder
+          }
           aria-label={dict.community.ariaMessage}
           className="max-h-40 flex-1 resize-none rounded-2xl border border-line bg-surface px-4 py-3 text-base leading-relaxed focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
         />
@@ -135,7 +214,7 @@ export function MessageComposer({
             "disabled:cursor-not-allowed disabled:opacity-40",
           )}
         >
-          {pending ? "…" : dict.community.send}
+          {pending ? "…" : editing ? dict.community.saveEdit : dict.community.send}
         </button>
       </div>
 

@@ -109,6 +109,13 @@ export function applicationStatusLabel(
   return known[status] ?? status;
 }
 
+/** Label for `profiles.role`, which would otherwise show raw in the console. */
+export function roleLabel(role: string, dict: Dictionary): string {
+  if (role === "admin") return dict.admin.roleAdmin;
+  if (role === "moderator") return dict.admin.roleModerator;
+  return dict.admin.roleUser;
+}
+
 /** Weekday initial for the check-in strip, in the member's locale. */
 export function weekdayInitial(dayKey: string, locale: Locale): string {
   // Noon avoids any DST/offset edge when converting a bare YYYY-MM-DD.
@@ -184,6 +191,58 @@ export function panicLabel(urge: number | null, dict: Dictionary): string {
   if (urge <= 5) return dict.panic.present;
   if (urge <= 7) return dict.panic.strong;
   return dict.panic.overwhelming;
+}
+
+/** Label for `panic_alerts.severity`, which is an enum the console would otherwise print raw. */
+export function alertSeverityLabel(severity: string, dict: Dictionary): string {
+  if (severity === "critical") return dict.admin.severityCritical;
+  if (severity === "warning") return dict.admin.severityWarning;
+  if (severity === "info") return dict.admin.severityInfo;
+  return severity;
+}
+
+/** Label for `panic_alerts.source`, the trigger that raised the alert. */
+export function alertSourceLabel(source: string, dict: Dictionary): string {
+  if (source === "panic_button") return dict.admin.sourcePanicButton;
+  if (source === "auto_urge") return dict.admin.sourceAutoUrge;
+  if (source === "chat") return dict.admin.sourceChat;
+  return source;
+}
+
+/** Label for `panic_alerts.status`. */
+export function alertStatusLabel(status: string, dict: Dictionary): string {
+  if (status === "open") return dict.admin.alertStatusOpen;
+  if (status === "acknowledged") return dict.admin.alertStatusAcknowledged;
+  if (status === "resolved") return dict.admin.alertStatusResolved;
+  return status;
+}
+
+/** Label for the `moderation_status` enum, shared by chat messages and the log. */
+export function moderationStatusLabel(status: string, dict: Dictionary): string {
+  if (status === "allowed") return dict.admin.moderationAllowed;
+  if (status === "flagged") return dict.admin.moderationFlagged;
+  if (status === "blocked") return dict.admin.moderationBlocked;
+  if (status === "failed") return dict.admin.moderationFailed;
+  return status;
+}
+
+/** Label for `notifications.type`. */
+export function notificationTypeLabel(type: string, dict: Dictionary): string {
+  if (type === "sos_response") return dict.admin.notifSosResponse;
+  if (type === "job_match") return dict.admin.notifJobMatch;
+  if (type === "job_application") return dict.admin.notifJobApplication;
+  if (type === "application_status") return dict.admin.notifApplicationStatus;
+  if (type === "moderation_notice") return dict.admin.notifModerationNotice;
+  if (type === "streak_milestone") return dict.admin.notifStreakMilestone;
+  if (type === "system") return dict.admin.notifSystem;
+  return type;
+}
+
+/** Label for `auth.users.raw_app_meta_data->>'provider'`. */
+export function providerLabel(provider: string, dict: Dictionary): string {
+  if (provider === "phone") return dict.admin.providerPhone;
+  if (provider === "email") return dict.admin.providerEmail;
+  return provider;
 }
 
 export function relativeTime(iso: string, dict: Dictionary, locale: Locale): string {

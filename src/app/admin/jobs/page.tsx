@@ -6,7 +6,10 @@ import { formatDate, formatMoney, jobCategoryLabel, jobStatusLabel } from "@/lib
 import { createClient } from "@/lib/supabase/server";
 import { getDictionary, getLocale } from "@/lib/i18n/server";
 
-export const metadata = { title: "Jobs — Steadfast Console" };
+export async function generateMetadata() {
+  const dict = await getDictionary();
+  return { title: dict.console.jobs };
+}
 
 export default async function AdminJobsPage() {
   await requireStaff();

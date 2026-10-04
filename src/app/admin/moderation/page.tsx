@@ -1,11 +1,15 @@
 import { MessageActions } from "@/components/admin/admin-actions";
 import { Badge, EmptyNote, Section } from "@/components/admin/dossier-ui";
 import { requireStaff } from "@/lib/dal";
-import { relativeTime } from "@/lib/format";
+import { alertSeverityLabel, moderationStatusLabel, relativeTime } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { interpolate } from "@/lib/i18n/interpolate";
 import { getDictionary, getLocale } from "@/lib/i18n/server";
 
-export const metadata = { title: "Moderation — Steadfast Console" };
+export async function generateMetadata() {
+  const dict = await getDictionary();
+  return { title: dict.console.moderation };
+}
 
 export default async function AdminModerationPage() {
   await requireStaff();
@@ -51,7 +55,9 @@ export default async function AdminModerationPage() {
             {(flagged ?? []).map((message) => (
               <li key={message.id} className="flex flex-col gap-2 rounded-xl border border-line p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone="warning">{message.moderation_status}</Badge>
+                  <Badge tone="warning">
+                    {moderationStatusLabel(message.moderation_status, dict)}
+                  </Badge>
                   <span className="ms-auto text-xs text-faint">
                     {relativeTime(message.created_at, dict, locale)}
                   </span>
@@ -73,11 +79,13 @@ export default async function AdminModerationPage() {
               <li key={row.id} className="flex flex-col gap-1 py-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone={row.status === "blocked" ? "danger" : "warning"}>
-                    {row.status}
+                    {moderationStatusLabel(row.status, dict)}
                   </Badge>
-                  <Badge tone="neutral">{row.severity}</Badge>
+                  <Badge tone="neutral">{alertSeverityLabel(row.severity, dict)}</Badge>
                   {row.latency_ms !== null && (
-                    <span className="text-xs text-faint">{row.latency_ms}ms</span>
+                    <span className="text-xs text-faint">
+                      {interpolate(dict.admin.user.latencyMs, { n: row.latency_ms })}
+                    </span>
                   )}
                   <span className="ms-auto text-xs text-faint">
                     {relativeTime(row.created_at, dict, locale)}

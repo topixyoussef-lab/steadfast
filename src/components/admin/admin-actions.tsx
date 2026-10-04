@@ -8,6 +8,7 @@ import {
   deleteMessageAction,
   liftSuspensionAction,
   resolveAlertAction,
+  setMemberRoleAction,
   suspendUserAction,
 } from "@/app/actions/admin";
 import { useI18n } from "@/components/i18n-provider";
@@ -163,6 +164,66 @@ export function SuspensionActions({
           }
         />
       ))}
+    </div>
+  );
+}
+
+/**
+ * Grant or revoke the admin role. Errors are shown inline (unlike the other
+ * actions here) because the server refuses some changes on purpose — own
+ * role, moderator callers — and silence would look like a broken button.
+ */
+export function RoleActions({
+  userId,
+  role,
+}: {
+  userId: string;
+  role: string;
+}) {
+  const { dict } = useI18n();
+  const [current, setCurrent] = useState(role);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const run = (next: "user" | "admin") =>
+    startTransition(async () => {
+      setError(null);
+      const result = await setMemberRoleAction({ userId, role: next });
+      if (result.ok) setCurrent(next);
+      else setError(result.error ?? dict.admin.noPermission);
+    });
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {current !== "admin" && (
+        <Row
+          label={dict.admin.appointAdmin}
+          variant="accent"
+          disabled={pending}
+          onClick={() => run("admin")}
+        />
+      )}
+      {current === "admin" && (
+        <Row
+          label={dict.admin.removeAdmin}
+          variant="danger"
+          disabled={pending}
+          onClick={() => run("user")}
+        />
+      )}
+      {current === "moderator" && (
+        <Row
+          label={dict.admin.demoteMember}
+          variant="danger"
+          disabled={pending}
+          onClick={() => run("user")}
+        />
+      )}
+      {error && (
+        <span role="alert" className="text-[11px] text-danger">
+          {error}
+        </span>
+      )}
     </div>
   );
 }

@@ -8,9 +8,10 @@ import { getProfile, getUser } from "@/lib/dal";
 import { getDictionary } from "@/lib/i18n/server";
 import { PREFERENCES } from "@/lib/preferences";
 
-export const metadata: Metadata = {
-  title: "Steadfast — replace the habit, keep the streak",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const dict = await getDictionary();
+  return { title: { absolute: dict.landing.title } };
+}
 
 export default async function LandingPage() {
   const [user, dict] = await Promise.all([getUser(), getDictionary()]);
@@ -105,6 +106,40 @@ export default async function LandingPage() {
               <p className="text-sm leading-relaxed text-muted">{body}</p>
             </div>
           ))}
+        </section>
+
+        <section className="flex flex-col items-start gap-4 rounded-2xl border bg-surface p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-4">
+            <BrandMark className="h-12 w-12 shrink-0" />
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold">{t.downloadTitle}</h2>
+              <p className="max-w-md text-sm leading-relaxed text-muted">
+                {t.downloadBody}
+              </p>
+              <p className="text-xs text-faint">{t.downloadNote}</p>
+            </div>
+          </div>
+          <a
+            href="/steadfast.apk"
+            download
+            className="inline-flex h-12 shrink-0 items-center gap-2 rounded-xl bg-accent px-6 text-base font-semibold text-accent-contrast hover:bg-accent-strong"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <path d="m7 10 5 5 5-5" />
+              <path d="M12 15V3" />
+            </svg>
+            {t.downloadButton}
+          </a>
         </section>
       </div>
 

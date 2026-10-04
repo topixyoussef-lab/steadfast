@@ -10,7 +10,10 @@ import { interpolate } from "@/lib/i18n/interpolate";
 import { getDictionary, getLocale } from "@/lib/i18n/server";
 import type { Job } from "@/lib/types";
 
-export const metadata = { title: "Applicants — Steadfast" };
+export async function generateMetadata() {
+  const dict = await getDictionary();
+  return { title: dict.jobs.applicants };
+}
 
 type Application = {
   id: string;
