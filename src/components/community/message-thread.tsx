@@ -215,8 +215,6 @@ export function MessageThread({
     const supabase = createClient();
 
     async function poll() {
-      if (document.hidden) return;
-
       const { data } = await supabase
         .from("chat_messages")
         .select(MESSAGE_COLUMNS)
@@ -243,9 +241,20 @@ export function MessageThread({
       if (fresh) setReactions(fresh as MessageReaction[]);
     }
 
-    const timer = setInterval(() => void poll(), POLL_MS);
+    // A hidden tab gets its timers throttled to about a minute, so the moment
+    // it comes back into view it asks for whatever it missed instead of waiting
+    // out the interval.
+    const onVisible = () => {
+      if (!document.hidden) void poll();
+    };
 
-    return () => clearInterval(timer);
+    const timer = setInterval(() => void poll(), POLL_MS);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [roomId, upsertMessage]);
 
   // Only a new message should pull the view down. Deleting or editing an old
