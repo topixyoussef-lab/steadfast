@@ -6,6 +6,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { MessageComposer } from "@/components/community/message-composer";
 import { useI18n } from "@/components/i18n-provider";
 import { createClient } from "@/lib/supabase/client";
+import { MESSAGE_COLUMNS } from "@/lib/chat";
 import { clockTime, pseudonym } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import type { ChatMessage, MessageReaction } from "@/lib/types";
@@ -21,6 +22,9 @@ type Props = {
 };
 
 const EXCERPT = 90;
+
+/** How often the thread re-reads the database for rows Realtime may not have delivered. */
+const POLL_MS = 8000;
 
 /** Must match the CHECK constraint on chat_message_reactions.emoji (0006). */
 const REACTION_SET = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -64,6 +68,11 @@ export function MessageThread({
   const [actionError, setActionError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const lastSeenRef = useRef<string>(
+    initialMessages.length > 0
+      ? initialMessages[initialMessages.length - 1].created_at
+      : new Date().toISOString(),
+  );
 
   const dropMessage = useCallback((id: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
@@ -190,6 +199,48 @@ export function MessageThread({
       void supabase.removeChannel(channel);
     };
   }, [roomId, upsertMessage, dropMessage, addReaction, dropReaction]);
+
+  // A channel can report SUBSCRIBED and still deliver nothing, which is what a
+  // table missing from the supabase_realtime publication looks like. This pulls
+  // anything newer than the last row the thread has seen, so the room keeps
+  // working while that is sorted out. Only new rows: removals still travel over
+  // Realtime, so a delete made here needs the other member to refresh.
+  useEffect(() => {
+    const supabase = createClient();
+
+    async function poll() {
+      if (document.hidden) return;
+
+      const { data } = await supabase
+        .from("chat_messages")
+        .select(MESSAGE_COLUMNS)
+        .eq("room_id", roomId)
+        .is("deleted_at", null)
+        .gt("created_at", lastSeenRef.current)
+        .order("created_at", { ascending: true })
+        .limit(50);
+
+      const rows = (data as ChatMessage[]) ?? [];
+      if (rows.length === 0) return;
+
+      lastSeenRef.current = rows[rows.length - 1].created_at;
+      for (const row of rows) upsertMessage(row);
+
+      const { data: reactionRows } = await supabase
+        .from("chat_message_reactions")
+        .select("id, message_id, user_id, emoji, created_at")
+        .in(
+          "message_id",
+          rows.map((row) => row.id),
+        );
+
+      for (const row of (reactionRows as MessageReaction[]) ?? []) addReaction(row);
+    }
+
+    const timer = setInterval(() => void poll(), POLL_MS);
+
+    return () => clearInterval(timer);
+  }, [roomId, upsertMessage, addReaction]);
 
   // Only a new message should pull the view down. Deleting or editing an old
   // one must not yank the reader to the bottom of the room.

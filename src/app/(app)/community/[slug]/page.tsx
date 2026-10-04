@@ -5,6 +5,7 @@ import { MessageThread } from "@/components/community/message-thread";
 import { BackIcon } from "@/components/icons";
 import { createClient } from "@/lib/supabase/server";
 import { requireOnboarded, getStaffUserIds } from "@/lib/dal";
+import { MESSAGE_COLUMNS } from "@/lib/chat";
 import { getDictionary } from "@/lib/i18n/server";
 import type { ChatMessage, MessageReaction, Room } from "@/lib/types";
 
@@ -37,7 +38,7 @@ export default async function RoomPage({
   const [{ data: messages }, staffIds] = await Promise.all([
     supabase
       .from("chat_messages")
-      .select("id, room_id, user_id, content, is_flagged_by_ai, moderation_status, reply_to, created_at, edited_at, deleted_at")
+      .select(MESSAGE_COLUMNS)
       .eq("room_id", room.id)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
