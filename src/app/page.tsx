@@ -24,15 +24,17 @@ export default async function LandingPage() {
 
   return (
     <main className="flex min-h-dvh flex-col safe-t">
-      <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 py-4">
-        <div className="flex items-center gap-2.5">
-          <BrandMark className="h-8 w-8" />
-          <span className="text-lg font-semibold tracking-tight">
-            {dict.common.appName}
-          </span>
+      <header className="mx-auto flex w-full max-w-3xl items-start justify-between gap-3 px-5 py-4">
+        <div className="flex flex-col items-start gap-2">
+          <div className="flex items-center gap-2.5">
+            <BrandMark className="h-8 w-8" />
+            <span className="text-lg font-semibold tracking-tight">
+              {dict.common.appName}
+            </span>
+          </div>
+          <LanguageSwitcher />
         </div>
         <div className="flex items-center gap-1">
-          <LanguageSwitcher />
           <Link
             href="/login"
             className="rounded-lg px-3 py-2 text-sm font-medium text-muted hover:bg-surface"
