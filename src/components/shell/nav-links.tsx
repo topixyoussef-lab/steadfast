@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { BellIcon, BriefcaseIcon, ChatIcon, GearIcon, HomeIcon, ShieldIcon } from "@/components/icons";
+import { BellIcon, BriefcaseIcon, ChatIcon, GearIcon, HomeIcon, ShieldIcon, UsersIcon } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import { interpolate } from "@/lib/i18n/interpolate";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
@@ -14,6 +14,9 @@ type NavItem = {
   icon: typeof HomeIcon;
   badge?: number;
 };
+
+/** The member chat lives at this room; it gets its own slot, not a list click. */
+const CHAT_HREF = "/community/main-hall";
 
 /**
  * The link list of the member shell.
@@ -37,7 +40,8 @@ export function NavLinks({
   const items: NavItem[] = [
     { href: "/notifications", label: dict.nav.notifications, icon: BellIcon, badge: unread },
     { href: "/dashboard", label: dict.nav.dashboard, icon: HomeIcon },
-    { href: "/community", label: dict.nav.communityRooms, icon: ChatIcon },
+    { href: CHAT_HREF, label: dict.nav.chat, icon: ChatIcon },
+    { href: "/community", label: dict.nav.communityRooms, icon: UsersIcon },
     { href: "/jobs", label: dict.nav.microJobs, icon: BriefcaseIcon },
     { href: "/settings", label: dict.nav.settings, icon: GearIcon },
   ];
@@ -84,5 +88,19 @@ export function NavLinks({
 /** Exact match for single-screen routes, prefix match so `/jobs/42` lights `/jobs`. */
 function isActive(pathname: string, href: string): boolean {
   if (href === "/dashboard" || href === "/notifications") return pathname === href;
+
+  // The chat room is reached straight from the strip, so it must not light the
+  // rooms list as well, and vice versa.
+  if (href === "/community") return pathname === "/community" || isOtherRoom(pathname);
+
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/** The rooms list lights for any room except the chat, which has its own slot. */
+function isOtherRoom(pathname: string): boolean {
+  return (
+    pathname.startsWith("/community/") &&
+    pathname !== CHAT_HREF &&
+    !pathname.startsWith(`${CHAT_HREF}/`)
+  );
 }
