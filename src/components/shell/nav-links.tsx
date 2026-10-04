@@ -51,13 +51,13 @@ export function NavLinks({
   }
 
   return (
-    <ul className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible lg:px-3 lg:pb-0">
+    <ul className="grid auto-cols-fr grid-flow-col gap-1 px-2 pb-2 lg:flex lg:flex-col lg:px-3 lg:pb-0">
       {items.map((item) => {
         const Icon = item.icon;
         const active = isActive(pathname, item.href);
 
         return (
-          <li key={item.href} className="shrink-0 lg:shrink">
+          <li key={item.href} className="min-w-0">
             <Link
               href={item.href}
               aria-current={active ? "page" : undefined}
@@ -65,13 +65,20 @@ export function NavLinks({
                 item.badge ? interpolate(dict.nav.unreadCount, { n: item.badge }) : undefined
               }
               className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
+                // Stacked icon over label, one equal column per destination, so
+                // the whole strip is exactly the screen width. The widest Arabic
+                // word in the set needs 38px and the narrowest phone gives ~44px
+                // per column, so nothing has to scroll to be reachable.
+                "flex flex-col items-center gap-1 rounded-xl px-1 py-1.5 text-center text-[10px] leading-tight transition",
                 "text-muted hover:bg-sunken hover:text-ink",
                 active && "bg-accent-soft text-accent",
+                "lg:flex-row lg:gap-3 lg:px-3 lg:py-2.5 lg:text-start lg:text-sm",
               )}
             >
               <Icon className="h-5 w-5 shrink-0" />
-              <span className="whitespace-nowrap">{item.label}</span>
+              <span className="max-w-full break-words lg:whitespace-nowrap">
+                {item.label}
+              </span>
               {item.badge ? (
                 <span className="ms-auto hidden h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-danger-soft px-1.5 text-[11px] font-semibold text-danger lg:flex">
                   {item.badge > 99 ? "99+" : item.badge}

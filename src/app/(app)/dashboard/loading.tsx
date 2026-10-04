@@ -8,7 +8,7 @@ export default function DashboardLoading() {
     >
       <div className="flex flex-col gap-2">
         <div className="h-7 w-52 animate-pulse rounded-lg bg-sunken" />
-        <div className="h-4 w-72 animate-pulse rounded-lg bg-sunken" />
+        <div className="h-4 w-72 max-w-full animate-pulse rounded-lg bg-sunken" />
       </div>
 
       <Suspense fallback={null}>
