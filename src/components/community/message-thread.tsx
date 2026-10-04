@@ -73,6 +73,10 @@ export function MessageThread({
       ? initialMessages[initialMessages.length - 1].created_at
       : new Date().toISOString(),
   );
+  const loadedMessageIds = useRef<string[]>(
+    initialMessages.map((message) => message.id),
+  );
+  const reactionWriteInProgress = useRef(false);
 
   const dropMessage = useCallback((id: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
@@ -202,9 +206,11 @@ export function MessageThread({
 
   // A channel can report SUBSCRIBED and still deliver nothing, which is what a
   // table missing from the supabase_realtime publication looks like. This pulls
-  // anything newer than the last row the thread has seen, so the room keeps
-  // working while that is sorted out. Only new rows: removals still travel over
-  // Realtime, so a delete made here needs the other member to refresh.
+  // what the channel should have carried: rows newer than the last message seen,
+  // and the current reaction set for the loaded page, which is the only way an
+  // added or removed chip shows up without Realtime. A soft delete made by
+  // someone else still needs a refresh, because that row stops matching the
+  // read policy.
   useEffect(() => {
     const supabase = createClient();
 
@@ -221,26 +227,26 @@ export function MessageThread({
         .limit(50);
 
       const rows = (data as ChatMessage[]) ?? [];
-      if (rows.length === 0) return;
+      if (rows.length > 0) {
+        lastSeenRef.current = rows[rows.length - 1].created_at;
+        for (const row of rows) upsertMessage(row);
+      }
 
-      lastSeenRef.current = rows[rows.length - 1].created_at;
-      for (const row of rows) upsertMessage(row);
+      const ids = loadedMessageIds.current;
+      if (ids.length === 0 || reactionWriteInProgress.current) return;
 
-      const { data: reactionRows } = await supabase
+      const { data: fresh } = await supabase
         .from("chat_message_reactions")
         .select("id, message_id, user_id, emoji, created_at")
-        .in(
-          "message_id",
-          rows.map((row) => row.id),
-        );
+        .in("message_id", ids);
 
-      for (const row of (reactionRows as MessageReaction[]) ?? []) addReaction(row);
+      if (fresh) setReactions(fresh as MessageReaction[]);
     }
 
     const timer = setInterval(() => void poll(), POLL_MS);
 
     return () => clearInterval(timer);
-  }, [roomId, upsertMessage, addReaction]);
+  }, [roomId, upsertMessage]);
 
   // Only a new message should pull the view down. Deleting or editing an old
   // one must not yank the reader to the bottom of the room.
@@ -275,6 +281,12 @@ export function MessageThread({
     () => new Map(messages.map((m) => [m.id, m])),
     [messages],
   );
+
+  // The poll reads this ref instead of depending on `messages`, which would
+  // restart the timer on every arrival.
+  useEffect(() => {
+    loadedMessageIds.current = messages.map((message) => message.id);
+  }, [messages]);
 
   // Members cannot read other profiles, so the room page resolves the staff
   // roles with the service role and hands the ids over.
@@ -346,7 +358,7 @@ export function MessageThread({
     dropMessage(message.id);
   }
 
-  async function toggleReaction(message: ChatMessage, emoji: string) {
+  async function applyReactionToggle(message: ChatMessage, emoji: string) {
     setPickerFor(null);
     setActionError(null);
 
@@ -413,6 +425,19 @@ export function MessageThread({
       ...prev.filter((r) => r.id !== tempId && r.id !== data.id),
       data,
     ]);
+  }
+
+  // The poll re-reads the whole reaction set, so it has to stand down while this
+  // write is in flight. Without the pause, the chip a member just tapped
+  // flickers out until the server row comes back, and a chip they just removed
+  // flickers back in until the delete lands.
+  async function toggleReaction(message: ChatMessage, emoji: string) {
+    reactionWriteInProgress.current = true;
+    try {
+      await applyReactionToggle(message, emoji);
+    } finally {
+      reactionWriteInProgress.current = false;
+    }
   }
 
   return (
