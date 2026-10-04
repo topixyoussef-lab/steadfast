@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { countryByIso, normalizePhone, normalizePhoneLoose } from "@/lib/phone";
+import { countryByIso, normalizePhone, normalizePhoneLoose, phoneToAuthEmail } from "@/lib/phone";
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getDictionary } from "@/lib/i18n/server";
 import {
@@ -88,11 +88,23 @@ export async function beginPasskeySignIn(
   const { data, error } = await admin.rpc("passkey_user_id_for_phone", {
     p_phone: phone,
   });
-  const userId = typeof data === "string" ? data : null;
+  let userId = typeof data === "string" ? data : null;
+
+  // The live database was migrated under the older passkey_user_id_for_email
+  // name; the migration file was renamed afterwards and never re-applied, so
+  // the phone-named function does not exist there yet. Fall back to the
+  // deployed name (same lookup, keyed on the synthetic email) instead of
+  // requiring database access the app does not have.
+  if (error) {
+    const legacy = await admin.rpc("passkey_user_id_for_email", {
+      p_email: phoneToAuthEmail(phone),
+    });
+    userId = !legacy.error && typeof legacy.data === "string" ? legacy.data : null;
+  }
 
   // One message for "no such account" and "no passkey enrolled": distinguishing
   // them would turn this form into an account-enumeration oracle.
-  if (error || !userId) {
+  if (!userId) {
     return { passkeyMissing: true, error: dict.auth.passkeyNotEnrolled };
   }
 
