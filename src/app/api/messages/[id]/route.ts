@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/dal";
-import { moderateMessage } from "@/lib/python-client";
+import { moderateChatContent } from "@/lib/moderation/engine";
 import { logModeration } from "@/lib/moderation-log";
 
 const bodySchema = z.object({
@@ -18,9 +18,10 @@ const MESSAGE_COLUMNS =
  *
  * Direct edits through RLS are blocked by the guard trigger in migration
  * 0006, so this route is the only writer of message text after posting. It
- * always runs Python moderation on the new text first, exactly like the post
- * route: an edit must not become a way to smuggle in words that would have
- * been blocked at post time.
+ * always runs moderation on the new text first — the local lexicon engine,
+ * with the Python service as a second opinion on non-allow verdicts — exactly
+ * like the post route: an edit must not become a way to smuggle in words that
+ * would have been blocked at post time.
  */
 export async function PATCH(
   request: Request,
@@ -73,33 +74,11 @@ export async function PATCH(
     return NextResponse.json({ ok: true, message: existing });
   }
 
-  const verdict = await moderateMessage(content, {
+  const verdict = await moderateChatContent(content, {
     userId: profile.id,
     roomId: existing.room_id,
     preferenceType: profile.preference_type,
   });
-
-  if (verdict === null) {
-    await logModeration({
-      userId: profile.id,
-      roomId: existing.room_id,
-      messageId: existing.id,
-      content,
-      status: "blocked",
-      severity: "warning",
-      categories: ["service_unavailable"],
-      reason: "Moderation service unreachable",
-    });
-
-    return NextResponse.json(
-      {
-        error:
-          "We could not check your edit right now. Please try again in a moment.",
-        decision: "block",
-      },
-      { status: 503 },
-    );
-  }
 
   if (verdict.decision === "block") {
     await logModeration({

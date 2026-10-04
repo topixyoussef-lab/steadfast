@@ -475,11 +475,11 @@ export function MessageThread({
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => startReply(message)}
-                      className="rounded-lg px-1.5 py-0.5 text-[11px] text-faint transition hover:text-accent"
+                      className="rounded-full bg-sunken px-3 py-1 text-xs font-medium text-muted transition hover:text-ink"
                     >
                       {dict.community.reply}
                     </button>
@@ -489,7 +489,7 @@ export function MessageThread({
                       onClick={() =>
                         setPickerFor(pickerFor === message.id ? null : message.id)
                       }
-                      className="rounded-lg px-1.5 py-0.5 text-[11px] text-faint transition hover:text-accent"
+                      className="rounded-full bg-sunken px-3 py-1 text-xs font-medium text-muted transition hover:text-ink"
                     >
                       {dict.community.react}
                     </button>
@@ -498,7 +498,7 @@ export function MessageThread({
                       <button
                         type="button"
                         onClick={() => startEdit(message)}
-                        className="rounded-lg px-1.5 py-0.5 text-[11px] text-faint transition hover:text-accent"
+                        className="rounded-full bg-sunken px-3 py-1 text-xs font-medium text-muted transition hover:text-ink"
                       >
                         {dict.community.edit}
                       </button>
@@ -508,7 +508,7 @@ export function MessageThread({
                       <button
                         type="button"
                         onClick={() => void deleteMessage(message)}
-                        className="rounded-lg px-1.5 py-0.5 text-[11px] text-faint transition hover:text-danger"
+                        className="rounded-full bg-sunken px-3 py-1 text-xs font-medium text-muted transition hover:text-danger"
                       >
                         {dict.common.delete}
                       </button>

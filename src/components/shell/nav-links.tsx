@@ -37,7 +37,7 @@ export function NavLinks({
   const items: NavItem[] = [
     { href: "/notifications", label: dict.nav.notifications, icon: BellIcon, badge: unread },
     { href: "/dashboard", label: dict.nav.dashboard, icon: HomeIcon },
-    { href: "/community", label: dict.nav.communityRooms, icon: ChatIcon },
+    { href: "/community/main-hall", label: dict.nav.chat, icon: ChatIcon },
     { href: "/jobs", label: dict.nav.microJobs, icon: BriefcaseIcon },
     { href: "/settings", label: dict.nav.settings, icon: GearIcon },
   ];

@@ -45,6 +45,7 @@ const en = {
     dashboard: "Dashboard",
     explore: "Explore",
     communityRooms: "Community rooms",
+    chat: "Chat",
     microJobs: "Micro jobs",
     notifications: "Notifications",
     adminConsole: "Admin console",
@@ -258,6 +259,11 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
       friday: "Friday",
       saturday: "Saturday",
     },
+  },
+
+  settings: {
+    languageTitle: "Language",
+    languageBody: "Switches the whole app between Arabic and English, immediately.",
   },
 
   community: {
@@ -808,6 +814,7 @@ const ar: Dictionary = {
     dashboard: "الرئيسية",
     explore: "تصفّح",
     communityRooms: "غرف المجتمع",
+    chat: "الدردشة",
     microJobs: "الأعمال الصغيرة",
     notifications: "الإشعارات",
     adminConsole: "لوحة الإدارة",
@@ -1017,6 +1024,11 @@ const ar: Dictionary = {
       friday: "الجمعة",
       saturday: "السبت",
     },
+  },
+
+  settings: {
+    languageTitle: "اللغة",
+    languageBody: "بتغيّر لغة التطبيق كله بين العربي والإنجليزي في الحال.",
   },
 
   community: {

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { moderateMessage } from "@/lib/python-client";
+import { moderateChatContent } from "@/lib/moderation/engine";
 
 export type JobState = {
   error?: string;
@@ -84,13 +84,14 @@ export async function postJobAction(
 
   // Job descriptions are the one place a stranger can ask a recovering
   // member for money or for content, so they go through the same moderation
-  // gate as chat. A blocked listing is never written at all.
-  const verdict = await moderateMessage(
+  // gate as chat: local lexicon first, Python second opinion on non-allow
+  // verdicts. A blocked listing is never written at all.
+  const verdict = await moderateChatContent(
     `${parsed.data.title}\n\n${parsed.data.description}`,
     { userId: user.id },
   );
 
-  if (verdict?.decision === "block") {
+  if (verdict.decision === "block") {
     return {
       fieldErrors: {
         description: [
@@ -113,7 +114,7 @@ export async function postJobAction(
     estimated_hours: parsed.data.estimatedHours ?? null,
     // Only an explicit pass counts as clean. If moderation was unavailable we
     // store the listing unverified rather than vouching for it.
-    is_ai_clean: verdict?.decision === "allow",
+    is_ai_clean: verdict.decision === "allow",
   });
 
   if (error) {
