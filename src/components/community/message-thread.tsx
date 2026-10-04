@@ -15,6 +15,7 @@ type ReplyTarget = { id: string; author: string; excerpt: string };
 type Props = {
   roomId: string;
   currentUserId: string;
+  staffIds: string[];
   initialMessages: ChatMessage[];
   initialReactions: MessageReaction[];
 };
@@ -49,6 +50,7 @@ type ReactionGroup = { emoji: string; count: number; mine: boolean };
 export function MessageThread({
   roomId,
   currentUserId,
+  staffIds,
   initialMessages,
   initialReactions,
 }: Props) {
@@ -223,6 +225,10 @@ export function MessageThread({
     [messages],
   );
 
+  // Members cannot read other profiles, so the room page resolves the staff
+  // roles with the service role and hands the ids over.
+  const staffSet = useMemo(() => new Set(staffIds), [staffIds]);
+
   const reactionGroups = useMemo(() => {
     const map = new Map<string, ReactionGroup[]>();
     for (const reaction of reactions) {
@@ -385,6 +391,7 @@ export function MessageThread({
           <ol className="flex flex-col gap-4">
             {messages.map((message) => {
               const mine = message.user_id === currentUserId;
+              const staff = staffSet.has(message.user_id);
               const author = mine
                 ? dict.community.you
                 : pseudonym(message.user_id, dict);
@@ -400,6 +407,11 @@ export function MessageThread({
                     <span className={cn("font-medium", mine && "text-accent")}>
                       {author}
                     </span>
+                    {staff && (
+                      <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-medium leading-none text-accent-contrast">
+                        {dict.community.staffBadge}
+                      </span>
+                    )}
                     <time dateTime={message.created_at}>
                       {clockTime(message.created_at, locale)}
                     </time>
@@ -416,6 +428,11 @@ export function MessageThread({
                         {parent.user_id === currentUserId
                           ? dict.community.you
                           : pseudonym(parent.user_id, dict)}
+                        {staffSet.has(parent.user_id) && (
+                          <span className="ms-1 text-accent">
+                            {dict.community.staffBadge}
+                          </span>
+                        )}
                       </span>
                       <span className="truncate text-xs text-faint">
                         {parent.content.slice(0, EXCERPT)}
@@ -428,7 +445,10 @@ export function MessageThread({
                       "w-fit max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
                       mine
                         ? "self-end rounded-se-sm bg-accent-soft text-ink"
-                        : "rounded-ss-sm border bg-surface",
+                        : cn(
+                            "rounded-ss-sm border bg-surface",
+                            staff && "border-s-[3px] border-s-accent bg-accent-soft/30",
+                          ),
                       message.is_flagged_by_ai && "border-warning/40",
                     )}
                   >

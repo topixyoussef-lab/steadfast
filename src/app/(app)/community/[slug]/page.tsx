@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { MessageThread } from "@/components/community/message-thread";
 import { BackIcon } from "@/components/icons";
 import { createClient } from "@/lib/supabase/server";
-import { requireOnboarded } from "@/lib/dal";
+import { requireOnboarded, getStaffUserIds } from "@/lib/dal";
 import { getDictionary } from "@/lib/i18n/server";
 import type { ChatMessage, MessageReaction, Room } from "@/lib/types";
 
@@ -34,13 +34,16 @@ export default async function RoomPage({
 
   // Descending so the LIMIT keeps the newest 100 rows, then reversed so the
   // thread reads oldest-to-newest and the composer sits under the newest one.
-  const { data: messages } = await supabase
-    .from("chat_messages")
-    .select("id, room_id, user_id, content, is_flagged_by_ai, moderation_status, reply_to, created_at, edited_at, deleted_at")
-    .eq("room_id", room.id)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const [{ data: messages }, staffIds] = await Promise.all([
+    supabase
+      .from("chat_messages")
+      .select("id, room_id, user_id, content, is_flagged_by_ai, moderation_status, reply_to, created_at, edited_at, deleted_at")
+      .eq("room_id", room.id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(100),
+    getStaffUserIds(),
+  ]);
 
   const initialMessages = [...(messages ?? [])].reverse() as ChatMessage[];
 
@@ -75,6 +78,7 @@ export default async function RoomPage({
       <MessageThread
         roomId={room.id}
         currentUserId={profile.id}
+        staffIds={staffIds}
         initialMessages={initialMessages}
         initialReactions={initialReactions}
       />
