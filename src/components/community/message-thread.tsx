@@ -77,6 +77,19 @@ export function MessageThread({
     initialMessages.map((message) => message.id),
   );
   const reactionWriteInProgress = useRef(false);
+  // An edit rewrites a row without moving its created_at, so the new-message
+  // watermark above cannot catch it. This one tracks the newest edited_at this
+  // tab has seen, and starts from what the server already rendered rather than
+  // from the client clock, which may disagree with the database.
+  const editedSeenRef = useRef<string>(
+    initialMessages.reduce((latest, message) => {
+      const stamp =
+        message.edited_at && message.edited_at > message.created_at
+          ? message.edited_at
+          : message.created_at;
+      return stamp > latest ? stamp : latest;
+    }, "0"),
+  );
 
   const dropMessage = useCallback((id: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
@@ -207,10 +220,10 @@ export function MessageThread({
   // A channel can report SUBSCRIBED and still deliver nothing, which is what a
   // table missing from the supabase_realtime publication looks like. This pulls
   // what the channel should have carried: rows newer than the last message seen,
-  // and the current reaction set for the loaded page, which is the only way an
-  // added or removed chip shows up without Realtime. A soft delete made by
-  // someone else still needs a refresh, because that row stops matching the
-  // read policy.
+  // rows edited since the last edit seen, and the current reaction set for the
+  // loaded page, which is the only way an added or removed chip shows up without
+  // Realtime. A soft delete made by someone else still needs a refresh, because
+  // that row stops matching the read policy.
   useEffect(() => {
     const supabase = createClient();
 
@@ -231,7 +244,29 @@ export function MessageThread({
       }
 
       const ids = loadedMessageIds.current;
-      if (ids.length === 0 || reactionWriteInProgress.current) return;
+      if (ids.length === 0) return;
+
+      // Edits keep their original created_at, so the query above is blind to
+      // them. Re-read rows edited since this tab's watermark, but only apply the
+      // ones already in view — an edit to a message outside the loaded page must
+      // not drop that message at the bottom of the thread.
+      const { data: edited } = await supabase
+        .from("chat_messages")
+        .select(MESSAGE_COLUMNS)
+        .eq("room_id", roomId)
+        .is("deleted_at", null)
+        .gt("edited_at", editedSeenRef.current)
+        .order("edited_at", { ascending: true })
+        .limit(50);
+
+      const loaded = new Set(ids);
+      const edits = (edited as ChatMessage[]) ?? [];
+      for (const row of edits) {
+        if (row.edited_at) editedSeenRef.current = row.edited_at;
+        if (loaded.has(row.id)) upsertMessage(row);
+      }
+
+      if (reactionWriteInProgress.current) return;
 
       const { data: fresh } = await supabase
         .from("chat_message_reactions")
@@ -275,7 +310,13 @@ export function MessageThread({
     };
     const onUpdated = (event: Event) => {
       const detail = (event as CustomEvent<ChatMessage>).detail;
-      if (detail?.id) upsertMessage(detail);
+      if (!detail?.id) return;
+      if (detail.edited_at && detail.edited_at > editedSeenRef.current) {
+        // This tab already holds the new text, so the poll must not fetch an
+        // older copy of the row and revert what the member just typed.
+        editedSeenRef.current = detail.edited_at;
+      }
+      upsertMessage(detail);
     };
     window.addEventListener("steadfast:optimistic", onOptimistic);
     window.addEventListener("steadfast:message-updated", onUpdated);
