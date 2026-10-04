@@ -65,7 +65,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       </aside>
 
       {/* On narrow screens the console chrome collapses; keep the escape hatch. */}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 safe-b">
         <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 lg:hidden">
           <Link
             href="/dashboard"
