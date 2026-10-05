@@ -166,8 +166,7 @@ passkeyDeleteWarning:
     passkeyReading: "Reading fingerprint",
 passkeyNotEnrolled:
         "No fingerprint is saved for that number yet. Sign in with your password once to add one.",
-      passkeySignInBody: "Put your finger on the sensor to sign in. No password needed.",
-    usePasswordInstead: "Sign in with your password instead",
+    orLabel: "or",
   },
 
   errors: {
@@ -945,8 +944,7 @@ const ar: Dictionary = {
     passkeyReading: "بنقرا البصمة",
     passkeyNotEnrolled:
       "مفيش بصمة مسجّلة للرقم ده. ادخل بكلمة المرور مرة واحدة عشان تضيف واحدة.",
-    passkeySignInBody: "حط صباعك على الحسّاس عشان تدخل. من غير كلمة مرور.",
-    usePasswordInstead: "ادخل بكلمة المرور بدل كده",
+    orLabel: "أو",
   },
 
   errors: {

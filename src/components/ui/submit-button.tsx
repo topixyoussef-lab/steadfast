@@ -10,6 +10,18 @@ type SubmitButtonProps = {
   pendingLabel?: string;
   variant?: "primary" | "ghost" | "danger";
   className?: string;
+  /**
+   * Routes this submit to a different server action than the form's own, which
+   * is how one form can offer both password and fingerprint sign-in from a
+   * single phone number field.
+   */
+  formAction?: string | ((formData: FormData) => void | Promise<void>);
+  /**
+   * Skips HTML5 validation. Required next to `formAction` whenever the form
+   * demands a field this alternative does not use — otherwise the required
+   * password input blocks the button before the action ever runs.
+   */
+  formNoValidate?: boolean;
 };
 
 export function SubmitButton({
@@ -17,6 +29,8 @@ export function SubmitButton({
   pendingLabel,
   variant = "primary",
   className,
+  formAction,
+  formNoValidate,
 }: SubmitButtonProps) {
   const { dict } = useI18n();
   const { pending } = useFormStatus();
@@ -26,6 +40,8 @@ export function SubmitButton({
       type="submit"
       disabled={pending}
       aria-busy={pending}
+      formAction={formAction}
+      formNoValidate={formNoValidate}
       className={cn(
         "inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl",
         "text-base font-semibold transition-all active:scale-[0.99]",
