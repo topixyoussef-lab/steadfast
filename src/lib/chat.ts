@@ -15,8 +15,26 @@
  * *literal* type of the select string; widen it to `string` and every caller
  * silently becomes `GenericStringError[]`, which is the same shape at runtime but
  * will not cast to ChatMessage.
+ *
+ * The *_BASE variants are for a database that has not taken 0009 yet. Naming a
+ * column that does not exist is a PostgREST error rather than a null field, so
+ * `select(MESSAGE_COLUMNS)` against an un-migrated database returns no data at
+ * all and the room page calls notFound(). Leaving the new parts off renders the
+ * app without media instead of not rendering at all. See src/lib/chat-schema.ts
+ * for how the database is asked which shape it has.
+ *
+ * Because a ternary over two constants is not a literal type, callers pass it to
+ * `.select()` and then cast the rows -- the shape differs by a branch the
+ * compiler cannot see, so there is nothing for supabase-js to parse.
  */
 export const ATTACHMENT_COLUMNS =
   "id, message_id, user_id, kind, mime_type, byte_size, description, duration_seconds, moderation_status, created_at";
 
-export const MESSAGE_COLUMNS = `id, room_id, user_id, content, is_flagged_by_ai, moderation_status, reply_to, created_at, edited_at, deleted_at, attachments (${ATTACHMENT_COLUMNS})`;
+export const MESSAGE_COLUMNS_BASE =
+  "id, room_id, user_id, content, is_flagged_by_ai, moderation_status, reply_to, created_at, edited_at, deleted_at";
+
+export const MESSAGE_COLUMNS = `${MESSAGE_COLUMNS_BASE}, attachments (${ATTACHMENT_COLUMNS})`;
+
+export const ROOM_COLUMNS_BASE = "id, slug, title, description, is_private";
+
+export const ROOM_COLUMNS = `${ROOM_COLUMNS_BASE}, chat_locked, voice_enabled, media_enabled`;
