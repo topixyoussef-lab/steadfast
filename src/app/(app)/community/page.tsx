@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { ChatIcon } from "@/components/icons";
 import { createClient } from "@/lib/supabase/server";
+import { ROOM_COLUMNS, ROOM_COLUMNS_BASE } from "@/lib/chat";
+import { chatMediaReady } from "@/lib/chat-schema";
 import { requireOnboarded } from "@/lib/dal";
 import { getDictionary } from "@/lib/i18n/server";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
@@ -17,15 +19,27 @@ export default async function CommunityPage() {
   const dict = await getDictionary();
 
   const supabase = await createClient();
-  const { data: rooms } = await supabase
+
+  // chat_locked arrived in 0009. Asking for it on a database without the column
+  // is a PostgREST error, not a null, so this select would come back with no
+  // rows and the whole rooms list would render empty for the window between
+  // deploying the code and applying the migration.
+  const mediaReady = await chatMediaReady();
+  const { data } = await supabase
     .from("rooms")
-    .select("id, slug, title, description, is_private, chat_locked")
+    .select(mediaReady ? ROOM_COLUMNS : ROOM_COLUMNS_BASE)
     .order("title");
+
+  // Cast rather than inferred: supabase-js reads the row shape out of the *type*
+  // of the select string, and a ternary over two constants is a union of literals
+  // it cannot parse. RoomRow is the shape both branches return, and it is spelled
+  // out next to the columns in src/lib/chat.ts.
+  const rooms = (data ?? []) as unknown as RoomRow[];
 
   // The main hall is the live group chat, not a room like the others: it gets
   // its own box at the top of the page instead of a row in the room list.
-  const chatRoom = (rooms ?? []).find((room) => room.slug === "main-hall");
-  const otherRooms = (rooms ?? []).filter((room) => room.slug !== "main-hall");
+  const chatRoom = rooms.find((room) => room.slug === "main-hall");
+  const otherRooms = rooms.filter((room) => room.slug !== "main-hall");
   const staffRooms = otherRooms.filter((room) => room.is_private);
   const memberRooms = otherRooms.filter((room) => !room.is_private);
   // "User rooms" only needs its own heading when there is also a staff section
@@ -90,7 +104,7 @@ export default async function CommunityPage() {
         </section>
       )}
 
-      {(rooms ?? []).length === 0 && (
+      {rooms.length === 0 && (
         <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted">
           {dict.community.noRoomsYet}
         </p>
@@ -99,14 +113,21 @@ export default async function CommunityPage() {
   );
 }
 
+/**
+ * A row from either side of 0009. `chat_locked` is absent on a database that has
+ * not taken the migration yet, so it cannot be required here.
+ */
+type RoomRow = Pick<
+  Room,
+  "id" | "slug" | "title" | "description" | "is_private"
+> &
+  Partial<Pick<Room, "chat_locked">>;
+
 function RoomList({
   rooms,
   dict,
 }: {
-  rooms: Pick<
-    Room,
-    "id" | "slug" | "title" | "description" | "is_private" | "chat_locked"
-  >[];
+  rooms: RoomRow[];
   dict: Dictionary;
 }) {
   if (rooms.length === 0) {
