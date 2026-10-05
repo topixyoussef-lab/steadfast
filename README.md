@@ -32,6 +32,7 @@ src/lib/            Supabase clients, DAL, python bridge
 supabase/migrations SQL schema, applied in order
 supabase/tests/     SQL assertions that run against a real database
 backend/            FastAPI moderation service
+assets/brand/       source artwork every icon surface is generated from
 ```
 
 ## Setup
@@ -145,10 +146,12 @@ non-zero on the first failed assertion, so it is safe to wire into CI.
 
 ## Icons and the installable app
 
-Every icon surface derives from one square artwork file:
+Every icon surface derives from one square artwork file, kept in the repo at
+`assets/brand/fist.jpeg` (1024x1024, the crop box below is measured against that
+size). With no argument both generators read it from there:
 
 ```bash
-node scripts/generate-icons.mjs path/to/artwork.png
+node scripts/generate-icons.mjs                       # or: … <path-to-artwork>
 ```
 
 That rewrites the manifest icons (plain and maskable), `apple-icon.png`,
@@ -162,7 +165,7 @@ The Android wrapper is a Bubblewrap TWA project living outside this repository a
 `D:\tmp\twa`. To rebuild the APK with new artwork:
 
 ```bash
-node scripts/generate-apk-icons.mjs path/to/artwork.png "D:/tmp/twa"
+node scripts/generate-apk-icons.mjs "D:/tmp/twa"       # or: … <artwork> <dir>
 ```
 
 then edit `versionCode`/`versionName` in `D:\tmp\twa\app\build.gradle` and run

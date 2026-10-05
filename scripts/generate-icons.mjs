@@ -1,12 +1,17 @@
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import sharp from "sharp";
 
-const SRC = process.argv[2];
-if (!SRC) {
-  console.error("usage: node scripts/generate-icons.mjs <path-to-square-artwork>");
+/** The artwork lives in the repo so regeneration never depends on Downloads. */
+const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
+const SRC = resolve(process.argv[2] ?? join(REPO, "assets/brand/fist.jpeg"));
+if (!existsSync(SRC)) {
+  console.error(`no artwork at ${SRC}`);
   process.exit(1);
 }
+console.log(`artwork: ${SRC}`);
 
 /**
  * The fist head on its own. Measured from the artwork's ink box; the full

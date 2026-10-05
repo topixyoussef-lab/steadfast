@@ -1,13 +1,23 @@
 import { existsSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import sharp from "sharp";
 
-const [SRC, PROJECT] = process.argv.slice(2);
-if (!SRC || !PROJECT) {
-  console.error("usage: node scripts/generate-apk-icons.mjs <artwork> <bubblewrap-project-dir>");
+const REPO = join(dirname(fileURLToPath(import.meta.url)), "..");
+const args = process.argv.slice(2);
+// With one argument it is the Bubblewrap project and the artwork is the default.
+const [artwork, PROJECT] = args.length === 1 ? [undefined, args[0]] : args;
+const SRC = resolve(artwork ?? join(REPO, "assets/brand/fist.jpeg"));
+if (!existsSync(SRC)) {
+  console.error(`no artwork at ${SRC}`);
   process.exit(1);
 }
+if (!PROJECT) {
+  console.error("usage: node scripts/generate-apk-icons.mjs [artwork] <bubblewrap-project-dir>");
+  process.exit(1);
+}
+console.log(`artwork: ${SRC}`);
 if (!existsSync(join(PROJECT, "twa-manifest.json"))) {
   console.error(`${PROJECT} has no twa-manifest.json — not a Bubblewrap project`);
   process.exit(1);
