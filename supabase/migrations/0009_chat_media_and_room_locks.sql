@@ -66,9 +66,14 @@ end $$;
 -- ============================================================
 -- 0001 made `content` carry the whole message, so a photo posted with no
 -- caption was rejected by the database for a rule about prose. The media now
--- lives beside the text, and either half may be empty -- but not both, which is
--- what the second constraint enforces. An empty row with no attachment is still
--- impossible, so nothing can be posted that is not a caption or a file.
+-- lives beside the text, so this keeps only the length limit.
+--
+-- What the database therefore does *not* enforce is "not both empty": a row with
+-- no caption and no attachment is insertable here. That rule lives in
+-- /api/moderate, which is chat_messages' only writer and refuses a post with
+-- neither half before it reaches this table. Stating it plainly rather than
+-- implying a constraint that is not there, because a future client INSERT policy
+-- would be writing into a column with no floor.
 
 do $$ begin
   if exists (

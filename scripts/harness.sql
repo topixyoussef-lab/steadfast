@@ -20,10 +20,27 @@ create schema if not exists auth;
 create schema if not exists extensions;
 create schema if not exists storage;
 
--- auth.users is only ever referenced as a foreign key target here.
+-- Supabase's postgres role carries these, so every object a migration creates
+-- in `public` is GRANTed to the client roles before RLS is consulted. Without
+-- them a local run refuses service_role at the privilege layer and the tests
+-- that prove "RLS, not a missing GRANT, is what keeps clients out" fail for the
+-- wrong reason. Statements before the migrations: default privileges only apply
+-- to objects created after they are set.
+alter default privileges in schema public grant all on tables to postgres, anon, authenticated, service_role;
+alter default privileges in schema public grant all on functions to postgres, anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to postgres, anon, authenticated, service_role;
+
+-- auth.users is only ever referenced as a foreign key target and by the
+-- admin dossier, so the stub carries just the columns those read.
 create table if not exists auth.users (
   id                 uuid primary key default gen_random_uuid(),
   email              text unique,
+  phone              text,
+  phone_confirmed_at timestamptz,
+  created_at         timestamptz not null default now(),
+  last_sign_in_at    timestamptz,
+  banned_until       timestamptz,
+  raw_app_meta_data  jsonb not null default '{}'::jsonb,
   raw_user_meta_data jsonb not null default '{}'::jsonb
 );
 

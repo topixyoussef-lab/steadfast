@@ -31,12 +31,17 @@ declare
   v_room       uuid;
   v_locked     uuid;
   v_msg        uuid;
+  v_captionless uuid;
   v_own_file   uuid;
   v_claimable  uuid;
   v_theirs     uuid;
   v_rows       integer;
   v_seen       integer;
   v_content    text;
+  v_chat_locked   boolean;
+  v_voice_enabled boolean;
+  v_media_enabled boolean;
+  v_is_private    boolean;
 begin
   ---------------------------------------------------------------- fixtures
   insert into auth.users (id, email) values
@@ -53,6 +58,15 @@ begin
   insert into public.rooms (slug, title, chat_locked)
     values ('quiet', 'Quiet', true) returning id into v_locked;
 
+  -- The claim target has to be a real message before the claim sections run:
+  -- chat_message_attachments.message_id is a foreign key, so a room id is not a
+  -- substitute for one. Only the service role writes chat_messages.
+  set local role service_role;
+  perform set_config('request.jwt.claim.role', 'service_role', true);
+
+  insert into public.chat_messages (room_id, user_id, content)
+    values (v_room, v_poster, 'caption') returning id into v_msg;
+
   -- The bucket row 0009 inserts, restated here as an assertion of its own.
   perform set_config('request.jwt.claim.role', 'anon', true);
 
@@ -61,9 +75,9 @@ begin
     raise exception 'chat-media bucket was not created';
   end if;
 
-  select public, file_size_limit into v_rows, v_content
+  select public, file_size_limit into v_is_private, v_content
     from storage.buckets where id = 'chat-media';
-  if v_rows <> false then
+  if v_is_private <> false then
     raise exception 'chat-media bucket must be private';
   end if;
   if v_content::text <> '4194304' then
@@ -81,10 +95,10 @@ begin
   end if;
 
   ---------------------------------------------------------------- staged files
-  insert into public.chat_message_attachments (user_id, kind, mime_type, byte_size, moderation_status)
-    values (v_poster, 'image', 'image/png', 1024, 'allowed') returning id into v_own_file;
-  insert into public.chat_message_attachments (user_id, kind, mime_type, byte_size, moderation_status)
-    values (v_bystander, 'image', 'image/png', 2048, 'allowed') returning id into v_theirs;
+  insert into public.chat_message_attachments (user_id, kind, mime_type, byte_size, moderation_status, storage_path)
+    values (v_poster, 'image', 'image/png', 1024, 'allowed', 'test/owned.png') returning id into v_own_file;
+  insert into public.chat_message_attachments (user_id, kind, mime_type, byte_size, moderation_status, storage_path)
+    values (v_bystander, 'image', 'image/png', 2048, 'allowed', 'test/theirs.png') returning id into v_theirs;
 
   set local role authenticated;
 
@@ -105,7 +119,7 @@ begin
   ------------------------------------------------- 2. clients cannot claim
   begin
     perform public.claim_message_attachments(
-      v_room, array[v_theirs], v_bystander
+      v_msg, array[v_theirs], v_bystander
     );
     raise exception 'a client claimed an attachment: the service_role guard is not holding';
   exception when insufficient_privilege then
@@ -113,16 +127,17 @@ begin
   end;
 
   set local role service_role;
+  perform set_config('request.jwt.claim.role', 'service_role', true);
 
   ------------------------------------------------- 3. a claim is all-or-nothing
-  -- v_own_file belongs to somebody else, so claiming it together with a
+  -- v_theirs belongs to another member, so claiming it together with a
   -- legitimate id must move neither row rather than half of them.
-  insert into public.chat_message_attachments (user_id, kind, mime_type, byte_size, moderation_status)
-    values (v_poster, 'audio', 'audio/webm', 4096, 'allowed') returning id into v_claimable;
+  insert into public.chat_message_attachments (user_id, kind, mime_type, byte_size, moderation_status, storage_path)
+    values (v_poster, 'audio', 'audio/webm', 4096, 'allowed', 'test/claimable.webm') returning id into v_claimable;
 
   begin
     perform public.claim_message_attachments(
-      v_room, array[v_claimable, v_own_file], v_poster
+      v_msg, array[v_claimable, v_theirs], v_poster
     );
     raise exception 'a claim took somebody else''s file';
   exception when insufficient_privilege then
@@ -130,16 +145,16 @@ begin
   end;
 
   select count(*) into v_rows from public.chat_message_attachments
-   where id in (v_claimable, v_own_file) and message_id is not null;
+   where id in (v_claimable, v_theirs) and message_id is not null;
   if v_rows <> 0 then
     raise exception 'a refused claim still moved a row';
   end if;
 
   ------------------------------------------------- 4. the good claim works
-  perform public.claim_message_attachments(v_room, array[v_claimable], v_poster);
+  perform public.claim_message_attachments(v_msg, array[v_claimable], v_poster);
 
   select count(*) into v_rows from public.chat_message_attachments
-   where id = v_claimable and message_id = v_room;
+   where id = v_claimable and message_id = v_msg;
   if v_rows <> 1 then
     raise exception 'a legitimate claim did not attach the file';
   end if;
@@ -147,36 +162,53 @@ begin
   -- A second claim of the same id must fail, which is what stops one upload being
   -- attached to two messages.
   begin
-    perform public.claim_message_attachments(v_room, array[v_claimable], v_poster);
+    perform public.claim_message_attachments(v_msg, array[v_claimable], v_poster);
     raise exception 'the same file was claimed twice';
   exception when insufficient_privilege then
     null;
   end;
 
   ---------------------------------------------------------------- message rules
-  set local role service_role;
-
+  -- 0009 replaces 0001's `char_length(content) between 1 and 2000` with a maximum
+  -- only, so a photo posted without a caption is writable. That means an empty
+  -- message with no attachment is *not* refused by the database -- the rule that
+  -- keeps it out of a room is /api/moderate, which refuses a post with neither a
+  -- caption nor an attachment to claim. Asserting a CHECK here would be asserting
+  -- a rule the migration deliberately dropped.
   insert into public.chat_messages (room_id, user_id, content)
-    values (v_room, v_poster, '') returning id into v_msg;
+    values (v_room, v_poster, '') returning id into v_captionless;
 
-  -- Both halves empty is still refused, so the relaxed CHECK did not open the
-  -- door to a message with no content at all.
+  select count(*) into v_rows from public.chat_messages where id = v_captionless;
+  if v_rows <> 1 then
+    raise exception 'a caption-less message was refused, so the CHECK was not relaxed';
+  end if;
+
+  -- The upper bound survived the rewrite.
   begin
-    insert into public.chat_messages (room_id, user_id, content) values (v_room, v_poster, '');
-    raise exception 'an empty message with no attachment was accepted';
+    insert into public.chat_messages (room_id, user_id, content)
+      values (v_room, v_poster, repeat('x', 2001));
+    raise exception 'a 2001-character message was accepted';
   exception when check_violation then
     null;
   end;
 
-  -- A locked room takes no message from the service role's own client path
-  -- either, because the trigger is the only thing between them and the room.
-  perform set_config('request.jwt.claim.role', 'service_role', true);
+  -- The locked-room guard is a trigger, so it runs regardless of who owns the
+  -- connection. Both halves of its contract matter: /api/moderate writes as the
+  -- service role and must still get through, and any caller whose JWT names a
+  -- different role is refused. The claim GUC is what auth.role() reads, so the
+  -- two cases differ by one setting and nothing else.
+  insert into public.chat_messages (room_id, user_id, content)
+    values (v_locked, v_poster, 'hi');
+
+  perform set_config('request.jwt.claim.role', 'authenticated', true);
   begin
     insert into public.chat_messages (room_id, user_id, content) values (v_locked, v_poster, 'hi');
-    raise exception 'a locked room accepted a message';
+    raise exception 'a locked room accepted a message from a member role';
   exception when insufficient_privilege then
     null;
   end;
+
+  perform set_config('request.jwt.claim.role', 'service_role', true);
 
   ---------------------------------------------------------------- room switches
   set local role authenticated;
@@ -209,16 +241,17 @@ begin
   update public.rooms set chat_locked = true, voice_enabled = false, media_enabled = false
    where id = v_room;
 
-  select chat_locked, voice_enabled, media_enabled into v_rows, v_content, v_seen
+  select chat_locked, voice_enabled, media_enabled
+    into v_chat_locked, v_voice_enabled, v_media_enabled
     from public.rooms where id = v_room;
-  if v_rows <> true or v_content <> 'f' or v_seen <> 'f' then
+  if v_chat_locked <> true or v_voice_enabled <> false or v_media_enabled <> false then
     raise exception 'an admin could not move the room switches';
   end if;
 
   ---------------------------------------------------------------- defaults
-  select voice_enabled into v_rows from public.rooms where id = v_locked;
-  if v_rows <> true then
-    raise exception 'voice_enabled should default to true, not %', v_rows;
+  select voice_enabled into v_voice_enabled from public.rooms where id = v_locked;
+  if v_voice_enabled <> true then
+    raise exception 'voice_enabled should default to true, not %', v_voice_enabled;
   end if;
 
   select count(*) into v_seen
