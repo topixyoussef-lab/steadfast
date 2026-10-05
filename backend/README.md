@@ -71,8 +71,8 @@ Auth is the `X-API-Token` header, compared in constant time.
 written. `flag` stores the message with `is_flagged_by_ai` set for the admin
 review queue. `413` for oversized bodies, `422` for empty ones.
 
-`engine` is `lexicon` or `hybrid`, so you can tell from the response whether a
-third party was consulted.
+`engine` is `lexicon`, `gemini` or `hybrid`, so you can tell from the response
+whether a third party was consulted.
 
 ### `POST /panic`
 
@@ -93,12 +93,34 @@ credentials out of this process is the point.
 ## Moderation modes
 
 - `lexicon` (default) is local, free, deterministic, and has no network calls.
+- `gemini` lets the model judge **every** message. The lexicon still runs
+  first and it is what decides whenever Gemini is throttled, late,
+  safety-filtered, or answers in a shape we cannot parse -- so a key that stops
+  working degrades moderation to the old behaviour instead of stopping chat.
+  Two rules hold this mode together:
+  * a model `allow` never silently releases a message the lexicon hard-blocked.
+    It becomes a `flag` tagged `model_overrode`, and a human still sees it.
+  * `GEMINI_TIMEOUT_SECONDS` (2.0) must stay under the 4 s the Next.js client
+    allows for the whole call. Past that the client aborts, `/api/moderate`
+    fails closed, and the member cannot post. A verdict from the lexicon beats
+    no verdict at all.
+  After one failure the service stops asking for `GEMINI_COOLDOWN_SECONDS`
+  (30), so a rate-limited key is not in every member's critical path.
+  `gemini-flash-lite-latest` is the model that works on this project's key:
+  correct verdicts on the sample set at ~900 ms, while `gemini-flash-latest`
+  returned 503 high-demand and the numbered 2.5 models returned 404/429.
+  The model's own free-text `reason` is parsed and kept for the log, but never
+  shown to the member -- the composer displays the deterministic sentence.
 - `hybrid` consults OpenAI only on messages the lexicon already flagged or
   blocked, and only if a key is set. It fails open to the lexicon verdict on
   timeout or error, so a slow third party can never block a member from
   posting. The model can also downgrade a block to a flag, tagged
   `model_overrode`.
 - `openai` is not recommended for a safety-critical MVP.
+
+`gemini` and the OpenAI paths are mutually exclusive: in `gemini` mode
+`openai_enabled` is false, so a key left in the environment does not make the
+service call two models per message.
 
 ## Evasion handling
 

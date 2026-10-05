@@ -103,8 +103,10 @@ npm run dev   # http://localhost:3001
 ## Moderation
 
 The lexicon engine in `backend/app/moderation/lexicon.py` is deterministic,
-local, and free. `MODERATION_MODE` also accepts `hybrid` (lexicon first,
-OpenAI as a second opinion) or `openai`.
+local, and free. `MODERATION_MODE` also accepts `gemini` (the model judges every
+message and the lexicon decides whenever the model is unavailable), `hybrid`
+(lexicon first, OpenAI as a second opinion) or `openai`. See
+`backend/README.md` for what each mode guarantees.
 
 Detection is intent-based rather than keyword-based, which matters a great deal
 here. Blocking the bare word `porn` would silence members describing a relapse,

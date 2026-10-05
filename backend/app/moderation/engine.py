@@ -1,11 +1,15 @@
 """Moderation engine.
 
 Pipeline: normalise -> lexicon match -> recovery-context rescue ->
-optional OpenAI second opinion -> decision.
+optional model verdict -> decision.
 
 The "recovery-context rescue" step is the important one. Without it, a member
 writing "I stopped masturbating after 30 days" would be blocked for the exact
 words that show they are getting better.
+
+In "gemini" mode the model judges every message and replaces the lexicon's
+decision, but the lexicon result is never thrown away: it is what decides when
+the model is unavailable, and a model "allow" cannot clear a lexicon hard block.
 """
 
 from __future__ import annotations
@@ -14,12 +18,13 @@ import asyncio
 import hashlib
 import re
 import time
-from collections import OrderedDict
 from typing import NamedTuple
 
 import httpx
 
 from app.config import Settings
+from app.moderation import gemini
+from app.moderation.cache import BoundedCache
 from app.moderation.lexicon import BLOCK_TERMS, FLAG_TERMS, RECOVERY_SAFE, Term
 from app.moderation.normalizer import (
     MASK_SENTINEL,
@@ -59,27 +64,7 @@ _RECOVERY_FRAMES = (
 )
 
 
-class _BoundedCache:
-    """Tiny LRU so repeated messages skip the network entirely."""
-
-    def __init__(self, capacity: int = 2048) -> None:
-        self._data: OrderedDict[str, dict] = OrderedDict()
-        self._capacity = capacity
-
-    def get(self, key: str) -> dict | None:
-        if key not in self._data:
-            return None
-        self._data.move_to_end(key)
-        return self._data[key]
-
-    def set(self, key: str, value: dict) -> None:
-        self._data[key] = value
-        self._data.move_to_end(key)
-        while len(self._data) > self._capacity:
-            self._data.popitem(last=False)
-
-
-_openai_cache = _BoundedCache()
+_openai_cache = BoundedCache()
 
 
 class _Pattern(NamedTuple):
@@ -243,6 +228,29 @@ async def moderate(content: str, settings: Settings) -> dict:
         categories.add("low_information")
 
     engine = "lexicon"
+
+    if settings.gemini_enabled:
+        verdict = await gemini.judge(content, settings)
+        if verdict is not None:
+            engine = "gemini"
+            categories |= set(verdict["categories"])
+            lexicon_decision = decision
+            decision = verdict["decision"]
+            if decision == "block":
+                acute = "self_harm" in block_cats or any(
+                    "self_harm" in c or "minor" in c for c in verdict["categories"]
+                )
+                severity = "critical" if acute else "warning"
+            elif decision == "flag":
+                severity = "warning"
+            else:
+                severity = "info"
+                if lexicon_decision == "block":
+                    # The model cleared a message the lexicon hard-blocked. A
+                    # human still looks at it; nothing is released silently.
+                    decision = "flag"
+                    severity = "warning"
+                    categories.add("model_overrode")
 
     if settings.openai_enabled and decision in {"flag", "block"}:
         score = 1.0 if decision == "block" else 0.5

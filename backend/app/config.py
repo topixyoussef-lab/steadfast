@@ -35,10 +35,31 @@ class Settings(BaseSettings):
     # "lexicon"  -> fully local, zero cost, always on
     # "hybrid"   -> lexicon first, OpenAI as a second opinion on risk
     # "openai"   -> OpenAI only (not recommended for a safety-critical MVP)
+    # "gemini"   -> Gemini is the judge of every message. The lexicon still
+    #               runs, and it is what decides whenever Gemini is throttled,
+    #               slow, or answers in a shape we cannot parse.
     moderation_mode: str = Field(default="lexicon", alias="MODERATION_MODE")
 
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     openai_model: str = Field(default="omni-moderation-latest", alias="OPENAI_MODEL")
+
+    gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
+    # "gemini-flash-latest" and the numbered flash models were both unusable on
+    # this project's key: 503 high-demand and 429 quota. flash-lite answers in
+    # about 900 ms and returns parseable JSON.
+    gemini_model: str = Field(default="gemini-flash-lite-latest", alias="GEMINI_MODEL")
+
+    # Gemini is asked for a verdict on every message in "gemini" mode, so this
+    # ceiling is what a member waits on before the lexicon decides instead. It
+    # has to stay under the 4 s the Next.js client allows for the whole call
+    # (src/lib/python-client.ts TIMEOUT_MS); past that the client gives up and
+    # chat fails closed, which is worse than a lexicon-only verdict.
+    gemini_timeout_seconds: float = Field(default=2.0, alias="GEMINI_TIMEOUT_SECONDS")
+
+    # After a 429/503/timeout the service stops asking Gemini for this many
+    # seconds and answers from the lexicon, so a throttled key does not put a
+    # slow third party in the critical path of every chat message.
+    gemini_cooldown_seconds: float = Field(default=30.0, alias="GEMINI_COOLDOWN_SECONDS")
 
     # Only reached in "hybrid" mode, and only after the lexicon scores >= this.
     hybrid_escalate_score: float = Field(default=0.4, alias="HYBRID_ESCALATE_SCORE")
@@ -84,14 +105,19 @@ class Settings(BaseSettings):
     @field_validator("moderation_mode")
     @classmethod
     def _check_mode(cls, value: str) -> str:
-        allowed = {"lexicon", "hybrid", "openai"}
+        allowed = {"lexicon", "hybrid", "openai", "gemini"}
         if value not in allowed:
             raise ValueError(f"MODERATION_MODE must be one of {sorted(allowed)}")
         return value
 
     @property
     def openai_enabled(self) -> bool:
-        return bool(self.openai_api_key) and self.moderation_mode != "lexicon"
+        # "gemini" mode must not also trigger the OpenAI escalation path.
+        return bool(self.openai_api_key) and self.moderation_mode in {"hybrid", "openai"}
+
+    @property
+    def gemini_enabled(self) -> bool:
+        return bool(self.gemini_api_key) and self.moderation_mode == "gemini"
 
 
 @lru_cache

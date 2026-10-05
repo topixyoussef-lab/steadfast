@@ -17,4 +17,9 @@ async def health(settings: Settings = Depends(get_settings)) -> dict:
         "version": __version__,
         "moderation_mode": settings.moderation_mode,
         "openai_enabled": settings.openai_enabled,
+        # Whether Gemini is actually judging, and which model answers. Both are
+        # public, and together they are the only way to confirm a deploy of the
+        # moderation config without the API token.
+        "gemini_enabled": settings.gemini_enabled,
+        "gemini_model": settings.gemini_model if settings.gemini_enabled else None,
     }

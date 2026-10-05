@@ -52,7 +52,7 @@ def test_trailing_and_blank_entries_are_dropped() -> None:
     assert settings.allowed_origins == ["http://a.com", "http://b.com"]
 
 
-@pytest.mark.parametrize("mode", ["lexicon", "hybrid", "openai"])
+@pytest.mark.parametrize("mode", ["lexicon", "hybrid", "openai", "gemini"])
 def test_valid_moderation_modes(mode: str) -> None:
     assert Settings(API_TOKEN=TOKEN, MODERATION_MODE=mode).moderation_mode == mode
 
@@ -68,7 +68,15 @@ def test_openai_is_off_without_a_key() -> None:
 
 
 def test_openai_needs_both_a_key_and_a_non_lexicon_mode() -> None:
-    assert Settings(API_TOKEN=TOKEN, OPENAI_API_KEY="sk-x").openai_enabled is False
+    # MODERATION_MODE is passed explicitly in these tests: they run in the same
+    # directory as a real .env, and whatever mode that file names would
+    # otherwise decide the outcome of an assertion about the default.
+    assert (
+        Settings(
+            API_TOKEN=TOKEN, OPENAI_API_KEY="sk-x", MODERATION_MODE="lexicon"
+        ).openai_enabled
+        is False
+    )
     assert (
         Settings(
             API_TOKEN=TOKEN, OPENAI_API_KEY="sk-x", MODERATION_MODE="hybrid"
@@ -77,12 +85,44 @@ def test_openai_needs_both_a_key_and_a_non_lexicon_mode() -> None:
     )
 
 
+def test_gemini_needs_a_key_and_only_the_gemini_mode() -> None:
+    assert (
+        Settings(
+            API_TOKEN=TOKEN, GEMINI_API_KEY="k", MODERATION_MODE="lexicon"
+        ).gemini_enabled
+        is False
+    )
+    assert (
+        Settings(
+            API_TOKEN=TOKEN, GEMINI_API_KEY=None, MODERATION_MODE="gemini"
+        ).gemini_enabled
+        is False
+    )
+    assert (
+        Settings(API_TOKEN=TOKEN, GEMINI_API_KEY="k", MODERATION_MODE="gemini")
+        .gemini_enabled
+        is True
+    )
+    # A key left in the environment for the OpenAI path must not make the
+    # service call two models per message.
+    assert (
+        Settings(
+            API_TOKEN=TOKEN,
+            OPENAI_API_KEY="sk-x",
+            GEMINI_API_KEY="k",
+            MODERATION_MODE="gemini",
+        ).openai_enabled
+        is False
+    )
+
+
 def test_real_env_file_parses() -> None:
     """The developer .env on this machine must not break collection."""
     get_settings.cache_clear()
     settings = Settings()
+    # Assert on the fields, never on the Settings repr: it contains API_TOKEN.
     assert isinstance(settings.allowed_origins, list)
-    assert settings.moderation_mode in {"lexicon", "hybrid", "openai"}
+    assert settings.moderation_mode in {"lexicon", "hybrid", "openai", "gemini"}
 
 
 def test_max_message_chars_mirrors_the_database_check() -> None:
