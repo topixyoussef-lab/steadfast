@@ -6,6 +6,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { MessageComposer } from "@/components/community/message-composer";
 import { useI18n } from "@/components/i18n-provider";
 import { createClient } from "@/lib/supabase/client";
+import { MESSAGE_COLUMNS } from "@/lib/chat";
 import { clockTime, pseudonym } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import type { ChatMessage, MessageReaction } from "@/lib/types";
@@ -15,11 +16,15 @@ type ReplyTarget = { id: string; author: string; excerpt: string };
 type Props = {
   roomId: string;
   currentUserId: string;
+  staffIds: string[];
   initialMessages: ChatMessage[];
   initialReactions: MessageReaction[];
 };
 
 const EXCERPT = 90;
+
+/** How often the thread re-reads the database for rows Realtime may not have delivered. */
+const POLL_MS = 8000;
 
 /** Must match the CHECK constraint on chat_message_reactions.emoji (0006). */
 const REACTION_SET = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -49,6 +54,7 @@ type ReactionGroup = { emoji: string; count: number; mine: boolean };
 export function MessageThread({
   roomId,
   currentUserId,
+  staffIds,
   initialMessages,
   initialReactions,
 }: Props) {
@@ -62,6 +68,28 @@ export function MessageThread({
   const [actionError, setActionError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const lastSeenRef = useRef<string>(
+    initialMessages.length > 0
+      ? initialMessages[initialMessages.length - 1].created_at
+      : new Date().toISOString(),
+  );
+  const loadedMessageIds = useRef<string[]>(
+    initialMessages.map((message) => message.id),
+  );
+  const reactionWriteInProgress = useRef(false);
+  // An edit rewrites a row without moving its created_at, so the new-message
+  // watermark above cannot catch it. This one tracks the newest edited_at this
+  // tab has seen, and starts from what the server already rendered rather than
+  // from the client clock, which may disagree with the database.
+  const editedSeenRef = useRef<string>(
+    initialMessages.reduce((latest, message) => {
+      const stamp =
+        message.edited_at && message.edited_at > message.created_at
+          ? message.edited_at
+          : message.created_at;
+      return stamp > latest ? stamp : latest;
+    }, "0"),
+  );
 
   const dropMessage = useCallback((id: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
@@ -189,6 +217,81 @@ export function MessageThread({
     };
   }, [roomId, upsertMessage, dropMessage, addReaction, dropReaction]);
 
+  // A channel can report SUBSCRIBED and still deliver nothing, which is what a
+  // table missing from the supabase_realtime publication looks like. This pulls
+  // what the channel should have carried: rows newer than the last message seen,
+  // rows edited since the last edit seen, and the current reaction set for the
+  // loaded page, which is the only way an added or removed chip shows up without
+  // Realtime. A soft delete made by someone else still needs a refresh, because
+  // that row stops matching the read policy.
+  useEffect(() => {
+    const supabase = createClient();
+
+    async function poll() {
+      const { data } = await supabase
+        .from("chat_messages")
+        .select(MESSAGE_COLUMNS)
+        .eq("room_id", roomId)
+        .is("deleted_at", null)
+        .gt("created_at", lastSeenRef.current)
+        .order("created_at", { ascending: true })
+        .limit(50);
+
+      const rows = (data as ChatMessage[]) ?? [];
+      if (rows.length > 0) {
+        lastSeenRef.current = rows[rows.length - 1].created_at;
+        for (const row of rows) upsertMessage(row);
+      }
+
+      const ids = loadedMessageIds.current;
+      if (ids.length === 0) return;
+
+      // Edits keep their original created_at, so the query above is blind to
+      // them. Re-read rows edited since this tab's watermark, but only apply the
+      // ones already in view — an edit to a message outside the loaded page must
+      // not drop that message at the bottom of the thread.
+      const { data: edited } = await supabase
+        .from("chat_messages")
+        .select(MESSAGE_COLUMNS)
+        .eq("room_id", roomId)
+        .is("deleted_at", null)
+        .gt("edited_at", editedSeenRef.current)
+        .order("edited_at", { ascending: true })
+        .limit(50);
+
+      const loaded = new Set(ids);
+      const edits = (edited as ChatMessage[]) ?? [];
+      for (const row of edits) {
+        if (row.edited_at) editedSeenRef.current = row.edited_at;
+        if (loaded.has(row.id)) upsertMessage(row);
+      }
+
+      if (reactionWriteInProgress.current) return;
+
+      const { data: fresh } = await supabase
+        .from("chat_message_reactions")
+        .select("id, message_id, user_id, emoji, created_at")
+        .in("message_id", ids);
+
+      if (fresh) setReactions(fresh as MessageReaction[]);
+    }
+
+    // A hidden tab gets its timers throttled to about a minute, so the moment
+    // it comes back into view it asks for whatever it missed instead of waiting
+    // out the interval.
+    const onVisible = () => {
+      if (!document.hidden) void poll();
+    };
+
+    const timer = setInterval(() => void poll(), POLL_MS);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [roomId, upsertMessage]);
+
   // Only a new message should pull the view down. Deleting or editing an old
   // one must not yank the reader to the bottom of the room.
   const lastId = messages.length > 0 ? messages[messages.length - 1].id : null;
@@ -207,7 +310,13 @@ export function MessageThread({
     };
     const onUpdated = (event: Event) => {
       const detail = (event as CustomEvent<ChatMessage>).detail;
-      if (detail?.id) upsertMessage(detail);
+      if (!detail?.id) return;
+      if (detail.edited_at && detail.edited_at > editedSeenRef.current) {
+        // This tab already holds the new text, so the poll must not fetch an
+        // older copy of the row and revert what the member just typed.
+        editedSeenRef.current = detail.edited_at;
+      }
+      upsertMessage(detail);
     };
     window.addEventListener("steadfast:optimistic", onOptimistic);
     window.addEventListener("steadfast:message-updated", onUpdated);
@@ -222,6 +331,21 @@ export function MessageThread({
     () => new Map(messages.map((m) => [m.id, m])),
     [messages],
   );
+
+  // The poll reads this ref instead of depending on `messages`, which would
+  // restart the timer on every arrival.
+  useEffect(() => {
+    loadedMessageIds.current = messages.map((message) => message.id);
+  }, [messages]);
+
+  // Members cannot read other profiles, so the room page resolves the staff
+  // roles with the service role and hands the ids over.
+  const staffSet = useMemo(() => new Set(staffIds), [staffIds]);
+
+  // Staff may hide anyone's message, so the delete action also appears on other
+  // people's bubbles. The route re-checks the role on every request; this only
+  // decides what to show.
+  const amStaff = staffSet.has(currentUserId);
 
   const reactionGroups = useMemo(() => {
     const map = new Map<string, ReactionGroup[]>();
@@ -262,13 +386,20 @@ export function MessageThread({
   }
 
   async function deleteMessage(message: ChatMessage) {
-    if (!window.confirm(dict.community.confirmDelete)) return;
+    // A member removing their own message and a moderator removing someone
+    // else's are different decisions, so they ask differently.
+    const bySomeoneElse = message.user_id !== currentUserId;
+    const confirmText = bySomeoneElse
+      ? dict.community.confirmDeleteByStaff
+      : dict.community.confirmDelete;
+
+    if (!window.confirm(confirmText)) return;
 
     setActionError(null);
 
-    // The live database rejects member writes to chat_messages, so the soft
-    // delete goes through the server route, which checks ownership and
-    // stamps deleted_at with the service role.
+    // The live database rejects member writes to chat_messages, so removing a
+    // message goes through the server route, which re-checks that the caller is
+    // either the author or staff and stamps deleted_at with the service role.
     const response = await fetch(`/api/messages/${message.id}`, {
       method: "DELETE",
     });
@@ -289,7 +420,7 @@ export function MessageThread({
     dropMessage(message.id);
   }
 
-  async function toggleReaction(message: ChatMessage, emoji: string) {
+  async function applyReactionToggle(message: ChatMessage, emoji: string) {
     setPickerFor(null);
     setActionError(null);
 
@@ -358,6 +489,19 @@ export function MessageThread({
     ]);
   }
 
+  // The poll re-reads the whole reaction set, so it has to stand down while this
+  // write is in flight. Without the pause, the chip a member just tapped
+  // flickers out until the server row comes back, and a chip they just removed
+  // flickers back in until the delete lands.
+  async function toggleReaction(message: ChatMessage, emoji: string) {
+    reactionWriteInProgress.current = true;
+    try {
+      await applyReactionToggle(message, emoji);
+    } finally {
+      reactionWriteInProgress.current = false;
+    }
+  }
+
   return (
     <>
       <div className="flex flex-1 flex-col gap-4">
@@ -385,6 +529,7 @@ export function MessageThread({
           <ol className="flex flex-col gap-4">
             {messages.map((message) => {
               const mine = message.user_id === currentUserId;
+              const staff = staffSet.has(message.user_id);
               const author = mine
                 ? dict.community.you
                 : pseudonym(message.user_id, dict);
@@ -400,6 +545,11 @@ export function MessageThread({
                     <span className={cn("font-medium", mine && "text-accent")}>
                       {author}
                     </span>
+                    {staff && (
+                      <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-medium leading-none text-accent-contrast">
+                        {dict.community.staffBadge}
+                      </span>
+                    )}
                     <time dateTime={message.created_at}>
                       {clockTime(message.created_at, locale)}
                     </time>
@@ -416,6 +566,11 @@ export function MessageThread({
                         {parent.user_id === currentUserId
                           ? dict.community.you
                           : pseudonym(parent.user_id, dict)}
+                        {staffSet.has(parent.user_id) && (
+                          <span className="ms-1 text-accent">
+                            {dict.community.staffBadge}
+                          </span>
+                        )}
                       </span>
                       <span className="truncate text-xs text-faint">
                         {parent.content.slice(0, EXCERPT)}
@@ -428,7 +583,10 @@ export function MessageThread({
                       "w-fit max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
                       mine
                         ? "self-end rounded-se-sm bg-accent-soft text-ink"
-                        : "rounded-ss-sm border bg-surface",
+                        : cn(
+                            "rounded-ss-sm border bg-surface",
+                            staff && "border-s-[3px] border-s-accent bg-accent-soft/30",
+                          ),
                       message.is_flagged_by_ai && "border-warning/40",
                     )}
                   >
@@ -504,7 +662,7 @@ export function MessageThread({
                       </button>
                     )}
 
-                    {mine && (
+                    {(mine || amStaff) && (
                       <button
                         type="button"
                         onClick={() => void deleteMessage(message)}

@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/dal";
-import { moderateChatContent } from "@/lib/moderation/engine";
+import { moderateMessage } from "@/lib/python-client";
 import { logModeration } from "@/lib/moderation-log";
 
 const bodySchema = z.object({
@@ -16,10 +16,9 @@ const bodySchema = z.object({
  * The only writer of chat_messages.
  *
  * There is deliberately no client-side INSERT policy on chat_messages, so
- * this handler is the sole path a message can take into the database.
- * Moderation runs on a local lexicon engine with zero network latency; only
- * flagged or blocked messages also consult the Python service as a second
- * opinion. Blocked messages are logged and dropped; they are never stored.
+ * this handler is the sole path a message can take into the database, and it
+ * always runs Python moderation first. Blocked messages are logged and
+ * dropped; they are never stored.
  */
 export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
@@ -57,11 +56,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unknown room" }, { status: 404 });
   }
 
-  const verdict = await moderateChatContent(content, {
+  const verdict = await moderateMessage(content, {
     userId: profile.id,
     roomId,
     preferenceType: profile.preference_type,
   });
+
+  if (verdict === null) {
+    // Fail closed. The moderation log records why, so staff can see whether
+    // this is a member being blocked by an outage or by their own words.
+    await logModeration({
+      userId: profile.id,
+      roomId,
+      content,
+      status: "blocked",
+      severity: "warning",
+      categories: ["service_unavailable"],
+      reason: "Moderation service unreachable",
+    });
+
+    return NextResponse.json(
+      {
+        error:
+          "We could not check your message right now. Please try again in a moment.",
+        decision: "block",
+      },
+      { status: 503 },
+    );
+  }
 
   if (verdict.decision === "block") {
     await logModeration({

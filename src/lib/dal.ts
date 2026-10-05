@@ -3,7 +3,7 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import type { DailyTask, Profile } from "@/lib/types";
 
 export const getUser = cache(async () => {
@@ -61,6 +61,27 @@ export async function requireStaff(): Promise<Profile> {
   }
   return profile;
 }
+
+/**
+ * Ids holding a staff role. The profiles read policy exposes a row to its owner
+ * or to staff only, so the chat cannot resolve roles with a join and needs this
+ * service-role list as a prop. Degrades to no badges rather than breaking the
+ * room.
+ */
+export const getStaffUserIds = cache(async (): Promise<string[]> => {
+  try {
+    const supabase = await createServiceRoleClient();
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id")
+      .in("role", ["admin", "moderator"]);
+
+    if (error) return [];
+    return ((data as { id: string }[]) ?? []).map((row) => row.id);
+  } catch {
+    return [];
+  }
+});
 
 export type CheckinRow = {
   day_key: string;

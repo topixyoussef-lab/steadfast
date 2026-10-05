@@ -31,25 +31,31 @@ export function ConsoleNav({ dict }: { dict: Dictionary }) {
   const pathname = usePathname() ?? "";
 
   return (
-    <ul className="flex gap-1 lg:flex-col">
+    <ul className="grid auto-cols-fr grid-flow-col gap-1 lg:flex lg:flex-col">
       {ITEMS.map((item) => {
         const Icon = item.icon;
         const active = isActive(pathname, item.href);
 
         return (
-          <li key={item.href} className="shrink-0 lg:shrink">
+          <li key={item.href} className="min-w-0">
             <Link
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition",
+                // Equal columns below `lg`: the four labels together need more
+                // than a phone gives, and this list has no scroll container, so
+                // a row of shrink-0 items used to push past the page edge.
+                "flex flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-center text-[10px] leading-tight transition",
                 "text-muted hover:bg-surface hover:text-ink",
                 active &&
                   "bg-accent text-accent-contrast hover:bg-accent hover:text-accent-contrast",
+                "lg:flex-row lg:gap-2.5 lg:px-3 lg:py-2 lg:text-start lg:text-sm",
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              <span className="whitespace-nowrap">{dict.console[item.labelKey]}</span>
+              <span className="max-w-full break-words lg:whitespace-nowrap">
+                {dict.console[item.labelKey]}
+              </span>
             </Link>
           </li>
         );

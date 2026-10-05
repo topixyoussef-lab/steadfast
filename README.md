@@ -32,6 +32,7 @@ src/lib/            Supabase clients, DAL, python bridge
 supabase/migrations SQL schema, applied in order
 supabase/tests/     SQL assertions that run against a real database
 backend/            FastAPI moderation service
+assets/brand/       source artwork every icon surface is generated from
 ```
 
 ## Setup
@@ -142,6 +143,53 @@ On PostgreSQL 10 the script rewrites `execute function` into
 `execute procedure` first, because 10 only understands the older spelling. Pass
 `-NoSubstitute` on 11 or newer. Each suite raises an exception and exits
 non-zero on the first failed assertion, so it is safe to wire into CI.
+
+## Icons and the installable app
+
+Every icon surface derives from one square artwork file, kept in the repo at
+`assets/brand/fist.jpeg` (1024x1024, the crop box below is measured against that
+size). With no argument both generators read it from there:
+
+```bash
+node scripts/generate-icons.mjs                       # or: … <path-to-artwork>
+```
+
+That rewrites the manifest icons (plain and maskable), `apple-icon.png`,
+`favicon.ico`, `icon.svg`, and `public/icons/brand-mark.png`, which the header
+and the landing page render. Small sizes use a cropped, tone-steepened variant of
+the artwork; the full composition collapses into an unreadable smudge at 16 px.
+After regenerating, bump the cache name in `public/sw.js` or installed PWAs keep
+serving the old icons.
+
+The Android wrapper is a Bubblewrap TWA project living outside this repository at
+`D:\tmp\twa`. To rebuild the APK with new artwork:
+
+```bash
+node scripts/generate-apk-icons.mjs "D:/tmp/twa"       # or: … <artwork> <dir>
+```
+
+then edit `versionCode`/`versionName` in `D:\tmp\twa\app\build.gradle` and run
+`npx @bubblewrap/cli build --skipPwaValidation` from that directory. The CLI asks
+for the version and keystore answers as it goes; `D:\tmp\twa\build-noninteractive.js`
+drives the same `build()` with a fake prompter that supplies them. Two
+environment traps: `bubblewrap` takes its JDK from
+`C:\Users\PC\.bubblewrap\config.json` and ignores an exported `JAVA_HOME`, and
+that path must be a full JDK (`javac.exe` present) rather than a JRE; and the
+Gradle plugin refuses to start when `ANDROID_HOME` and `ANDROID_SDK_ROOT` name
+different SDKs. The build does not regenerate icon resources — only
+`generate-apk-icons.mjs` does, and it also refreshes `store_icon.png` so a later
+`bubblewrap update` cannot restore the old art.
+
+Copy the result into the repo and release it like any other asset:
+
+```bash
+cp /d/tmp/twa/app-release-signed.apk public/steadfast.apk
+```
+
+Keep the signing keystore in `C:\Users\PC\.steadfast-signing` and reuse it. A new
+certificate produces an APK that cannot update the installed app in place. Never
+commit a build log: `bubblewrap` echoes the `jarsigner` command line, which
+contains the keystore password in plaintext.
 
 ## Security notes
 

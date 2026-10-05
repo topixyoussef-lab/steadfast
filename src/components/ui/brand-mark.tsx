@@ -1,21 +1,18 @@
 export function BrandMark({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 32 32"
-      fill="none"
-      aria-hidden="true"
-      className={className}
-    >
+    <svg viewBox="0 0 32 32" aria-hidden="true" className={className}>
+      {/* The mark is the artwork itself, corners already rounded by
+          scripts/generate-icons.mjs at this same 28% radius. */}
+      <image href="/icons/brand-mark.png" width="32" height="32" />
       <rect
-        width="32"
-        height="32"
-        rx="9"
-        className="fill-accent-soft stroke-accent/40"
+        x="0.5"
+        y="0.5"
+        width="31"
+        height="31"
+        rx="8.5"
+        fill="none"
+        className="stroke-accent/40"
         strokeWidth="1"
-      />
-      <path
-        d="M16 6.5l2.36 4.78 5.28.77-3.82 3.72.9 5.26L16 18.44l-4.72 2.59.9-5.26-3.82-3.72 5.28-.77L16 6.5z"
-        className="fill-accent"
       />
     </svg>
   );

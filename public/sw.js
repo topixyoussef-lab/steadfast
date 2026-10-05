@@ -1,6 +1,11 @@
-const CACHE = "steadfast-v1";
+const CACHE = "steadfast-v2";
 
-const PRECACHE = ["/", "/icons/icon-192.png", "/icons/icon-512.png"];
+const PRECACHE = [
+  "/",
+  "/icons/brand-mark.png",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

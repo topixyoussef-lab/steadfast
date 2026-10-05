@@ -52,6 +52,10 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
+  // Without this the browser keeps content out of the notch itself and every
+  // env(safe-area-inset-*) reads zero, which is what the safe-t and safe-b
+  // paddings across the app are waiting for.
+  viewportFit: "cover",
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {

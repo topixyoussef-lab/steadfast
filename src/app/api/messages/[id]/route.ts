@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/dal";
-import { moderateChatContent } from "@/lib/moderation/engine";
+import { moderateMessage } from "@/lib/python-client";
 import { logModeration } from "@/lib/moderation-log";
 
 const bodySchema = z.object({
@@ -18,10 +18,9 @@ const MESSAGE_COLUMNS =
  *
  * Direct edits through RLS are blocked by the guard trigger in migration
  * 0006, so this route is the only writer of message text after posting. It
- * always runs moderation on the new text first — the local lexicon engine,
- * with the Python service as a second opinion on non-allow verdicts — exactly
- * like the post route: an edit must not become a way to smuggle in words that
- * would have been blocked at post time.
+ * always runs Python moderation on the new text first, exactly like the post
+ * route: an edit must not become a way to smuggle in words that would have
+ * been blocked at post time.
  */
 export async function PATCH(
   request: Request,
@@ -74,11 +73,33 @@ export async function PATCH(
     return NextResponse.json({ ok: true, message: existing });
   }
 
-  const verdict = await moderateChatContent(content, {
+  const verdict = await moderateMessage(content, {
     userId: profile.id,
     roomId: existing.room_id,
     preferenceType: profile.preference_type,
   });
+
+  if (verdict === null) {
+    await logModeration({
+      userId: profile.id,
+      roomId: existing.room_id,
+      messageId: existing.id,
+      content,
+      status: "blocked",
+      severity: "warning",
+      categories: ["service_unavailable"],
+      reason: "Moderation service unreachable",
+    });
+
+    return NextResponse.json(
+      {
+        error:
+          "We could not check your edit right now. Please try again in a moment.",
+        decision: "block",
+      },
+      { status: 503 },
+    );
+  }
 
   if (verdict.decision === "block") {
     await logModeration({
@@ -143,12 +164,13 @@ export async function PATCH(
 }
 
 /**
- * Soft-delete one of your own messages.
+ * Hide a message: the author removes their own, staff remove anyone's.
  *
  * The live database rejects member writes to chat_messages outright, so this
- * route is the only writer, same as the edit above. Ownership is checked here
- * before the service role touches the row, and the row is only stamped: the
- * moderation log and reply threads keep their anchors.
+ * route is the only writer, same as the edit above. Authorization happens here
+ * against the row read with the service role, and the row is only stamped:
+ * `deleted_at` takes it out of `chat_read` for everyone while keeping the
+ * moderation log entry and the anchor any reply points at.
  */
 export async function DELETE(
   _request: Request,
@@ -169,7 +191,8 @@ export async function DELETE(
   }
 
   // The read goes through the service role so an already-deleted row still
-  // comes back and gets an idempotent answer instead of a bogus 404.
+  // comes back and gets an idempotent answer instead of a bogus 404, and so a
+  // staff removal of someone else's message can be authorized before it runs.
   const admin = await createServiceRoleClient();
   const { data: existing } = await admin
     .from("chat_messages")
@@ -180,18 +203,25 @@ export async function DELETE(
   if (!existing) {
     return NextResponse.json({ error: "Unknown message" }, { status: 404 });
   }
-  if (existing.user_id !== profile.id) {
+
+  const isOwner = existing.user_id === profile.id;
+  const isStaff = profile.role === "admin" || profile.role === "moderator";
+
+  if (!isOwner && !isStaff) {
     return NextResponse.json({ error: "Not your message" }, { status: 403 });
   }
   if (existing.deleted_at) {
     return NextResponse.json({ ok: true });
   }
 
+  // No user_id filter: for a staff removal the row belongs to somebody else,
+  // and re-checking it here would make the update match zero rows while still
+  // answering as a success.
   const { error: deleteError } = await admin
     .from("chat_messages")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("user_id", profile.id);
+    .is("deleted_at", null);
 
   if (deleteError) {
     return NextResponse.json(
