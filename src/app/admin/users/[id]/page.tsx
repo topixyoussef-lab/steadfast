@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { RoleActions, SuspensionActions } from "@/components/admin/admin-actions";
+import {
+  ClearAllNotificationsActions,
+  DeleteAccountActions,
+  LogRowActions,
+  MessageActions,
+  NotificationActions,
+  RoleActions,
+  SuspensionActions,
+} from "@/components/admin/admin-actions";
 import {
   Badge,
   EmptyNote,
@@ -52,8 +60,9 @@ export default async function AdminUserPage({
   const { id } = await params;
 
   // The layout already guards this; repeating it here means the page is safe
-  // even if it is ever rendered outside the console shell.
-  await requireStaff();
+  // even if it is ever rendered outside the console shell. The result is kept
+  // because the danger zone below needs to know who is looking at it.
+  const staff = await requireStaff();
 
   // Anything that is not a uuid would be handed straight to PostgREST as a
   // parameter, and a bad value is a 400 rather than a 404.
@@ -200,6 +209,24 @@ export default async function AdminUserPage({
               <SuspensionActions userId={p.id} suspended={dossier.is_suspended} />
             </div>
           </Section>
+
+          {/* Bottom of the rail on purpose: this is the one control here that
+              cannot be undone, so it should not sit next to a role toggle.
+              Hidden on your own dossier because the action refuses that, and a
+              permanently failing button is worse than no button. Moderators
+              still see it and get the server's "only admins" reason inline,
+              same as RoleActions. */}
+          {staff.id !== p.id && (
+            <Section title={dict.admin.dangerZone} className="border-danger/40">
+              <div className="flex flex-col gap-2">
+                <p className="text-[11px] text-muted">{dict.admin.deleteAccountWarning}</p>
+                <DeleteAccountActions
+                  userId={p.id}
+                  displayName={p.display_name ?? dict.admin.unnamed}
+                />
+              </div>
+            </Section>
+          )}
         </div>
 
         {/* Everything the member actually did. */}
@@ -463,6 +490,7 @@ function ChatHistory({
                 </time>
               </div>
               <p className="text-sm leading-relaxed">{row.content}</p>
+              <MessageActions messageId={row.id} />
             </li>
           ))}
         </ul>
@@ -520,6 +548,7 @@ function ModerationHistory({
                   {[...row.categories, ...row.matched_terms].join("، ")}
                 </p>
               )}
+              <LogRowActions logId={String(row.id)} />
             </li>
           ))}
         </ul>
@@ -624,7 +653,20 @@ function NotificationHistory({
   const u = dict.admin.user;
 
   return (
-    <Section title={u.notificationHistory} count={rows.notifications.length}>
+    <Section
+      title={u.notificationHistory}
+      count={rows.notifications.length}
+      // Clear-all only when there is something to clear, and it sits in the
+      // header so it is not mistaken for a per-row control.
+      action={
+        rows.notifications.length > 0 ? (
+          <ClearAllNotificationsActions
+            userId={rows.profile.id}
+            count={rows.notifications.length}
+          />
+        ) : null
+      }
+    >
       {rows.notifications.length === 0 ? (
         <EmptyNote>{u.empty}</EmptyNote>
       ) : (
@@ -640,9 +682,12 @@ function NotificationHistory({
                 </Badge>
                 <span className="truncate text-sm">{row.title}</span>
               </span>
-              <time className="shrink-0 text-xs text-faint" dateTime={row.created_at}>
-                {relativeTime(row.created_at, dict, locale)}
-              </time>
+              <span className="flex shrink-0 items-center gap-2">
+                <time className="text-xs text-faint" dateTime={row.created_at}>
+                  {relativeTime(row.created_at, dict, locale)}
+                </time>
+                <NotificationActions notificationId={row.id} />
+              </span>
             </li>
           ))}
         </ul>

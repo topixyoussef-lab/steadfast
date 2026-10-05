@@ -23,6 +23,23 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BUILD_STAMP: buildStamp(),
   },
 
+  experimental: {
+    /**
+     * Holds a failed Server Action instead of letting it reject, then retries it
+     * once the connection is back.
+     *
+     * This is the case the app most needs: a check-in or a panic alert is a
+     * Server Action, and someone logging an urge at 2am with no signal would
+     * otherwise get a thrown fetch and no record of the moment at all. The
+     * framework polls with a single HEAD every 3s while down, so the held
+     * action goes out once on reconnection and nothing floods the origin.
+     *
+     * `OfflineBanner` reads the same state, because an action that waits looks
+     * identical to a frozen button unless something says why.
+     */
+    useOffline: true,
+  },
+
   async headers() {
     return [
       {

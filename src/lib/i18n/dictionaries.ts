@@ -77,6 +77,12 @@ const en = {
     download: "Download the app",
   },
 
+  offline: {
+    banner: "You are offline.",
+    retrying: "Anything you submit is held and sent the moment you reconnect.",
+    back: "Back online.",
+  },
+
   landing: {
     title: "Steadfast — replace the habit, keep the streak",
     heroLine1: "Replace the habit.",
@@ -438,6 +444,44 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
     sourceAndDay: "Source: {source} · Day {day}",
     flaggedMessages: "Flagged messages",
     nothingToReview: "Nothing waiting for review.",
+
+    /** Filter bar above the moderation console. */
+    moderationFilters: "Filters",
+    filterAll: "All",
+    filterAllowed: "Allowed",
+    filterFlagged: "Flagged",
+    filterBlocked: "Blocked",
+    deleteLogRow: "Delete log row",
+    confirmDeleteMessage:
+      "Delete this message? It is removed for everyone and cannot be undone.",
+    confirmDeleteLogRow:
+      "Delete this log row? The audit record of what the AI judged is deleted too.",
+
+    /** One-off notification delete, and the per-member clear-all. */
+    deleteNotification: "Delete",
+    confirmDeleteNotification: "Delete this notification? This cannot be undone.",
+    clearAllNotifications: "Clear all",
+    confirmClearAllNotifications:
+      "Clear all {n} notifications for this member? Their history is removed and this cannot be undone.",
+    notificationsCleared: "Cleared {n} notifications.",
+
+    /** Account deletion. The irreversible one. */
+    dangerZone: "Danger zone",
+    deleteAccount: "Delete account",
+    deleteAccountWarning:
+      "This deletes the sign-in and every trace of the member. It cannot be undone.",
+    deleteAccountKeepsLog:
+      "The moderation log is kept, with this member detached from it.",
+    typeDeleteToConfirm: "Type {word} to confirm",
+    confirmAndDelete: "Delete permanently",
+    cancel: "Cancel",
+    accountDeleted: "Account deleted.",
+    filterSearchPlaceholder: "Search messages or categories",
+    filterShowing: "Showing {shown} of {total}",
+    filterReset: "Clear filters",
+    filterNothingMatches: "No messages match these filters.",
+    filterEngine: "Engine",
+    moderationIntroShort: "Flagged messages and the moderation log.",
     membersTitle: "Members",
     unnamed: "Unnamed",
     suspendedBadge: "suspended",
@@ -856,6 +900,12 @@ const ar: Dictionary = {
     download: "نزّل التطبيق",
   },
 
+  offline: {
+    banner: "أنت غير متصل بالإنترنت.",
+    retrying: "أي حاجة تباعتها هتتستنى وتتبعت أول ما الشبكة ترجع.",
+    back: "رجع الاتصال.",
+  },
+
   landing: {
     title: "ستيدفاست — غيّر العادة، حافظ على السلسلة",
     heroLine1: "غيّر العادة.",
@@ -1210,6 +1260,40 @@ const ar: Dictionary = {
     sourceAndDay: "المصدر: {source} · اليوم {day}",
     flaggedMessages: "رسائل مُعلَّمة",
     nothingToReview: "لا شيء في انتظار المراجعة.",
+
+    moderationFilters: "عوامل التصفية",
+    filterAll: "الكل",
+    filterAllowed: "مسموحة",
+    filterFlagged: "معلّمة",
+    filterBlocked: "محظورة",
+    deleteLogRow: "حذف سطر السجل",
+    confirmDeleteMessage:
+      "تحذف هذه الرسالة؟ هتتشال من عند كل الناس ومش هترجع تاني.",
+    confirmDeleteLogRow:
+      "تحذف سطر السجل ده؟ هيتمسح كمان سجل المراجعة للقرار اللي الـ AI وصله.",
+
+    deleteNotification: "حذف",
+    confirmDeleteNotification: "تحذف الإشعار ده؟ مش هيرجع تاني.",
+    clearAllNotifications: "مسح الكل",
+    confirmClearAllNotifications:
+      "تمسح كل الإشعارات ({n}) للعضو ده؟ سجله هيتشال بالكامل ومش هيرجع تاني.",
+    notificationsCleared: "اتمسحت {n} إشعار.",
+
+    dangerZone: "منطقة الخطر",
+    deleteAccount: "حذف الحساب",
+    deleteAccountWarning:
+      "الحذف ده بيمسح تسجيل الدخول وكل بيانات العضو. مش هينفع ترجعه تاني.",
+    deleteAccountKeepsLog: "سجل الرقابة هيفضل موجود، بس من غير ربط بالعضو.",
+    typeDeleteToConfirm: "اكتب {word} للتأكيد",
+    confirmAndDelete: "احذف نهائي",
+    cancel: "إلغاء",
+    accountDeleted: "الحساب اتمسح.",
+    filterSearchPlaceholder: "ابحث في الرسائل أو التصنيفات",
+    filterShowing: "عرض {shown} من {total}",
+    filterReset: "مسح التصفية",
+    filterNothingMatches: "لا توجد رسائل مطابقة.",
+    filterEngine: "المحرك",
+    moderationIntroShort: "الرسائل المُعلَّمة وسجل الرقابة.",
     membersTitle: "الأعضاء",
     unnamed: "بدون اسم",
     suspendedBadge: "موقوف",

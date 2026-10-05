@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Cairo, Geist, Geist_Mono } from "next/font/google";
 
 import { I18nProvider } from "@/components/i18n-provider";
+import { OfflineBanner } from "@/components/offline-banner";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
 import { UpdatePrompt } from "@/components/update-prompt";
 import { htmlLang } from "@/lib/i18n/config";
@@ -83,6 +84,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       >
         <I18nProvider dict={dict} locale={locale}>
           <ServiceWorkerRegister />
+          <OfflineBanner />
           <UpdatePrompt />
           {children}
         </I18nProvider>

@@ -1,11 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import {
   acknowledgeAlertAction,
+  clearAllNotificationsAction,
   clearMessageAction,
+  deleteMemberAccountAction,
   deleteMessageAction,
+  deleteModerationLogAction,
+  deleteNotificationAction,
   liftSuspensionAction,
   resolveAlertAction,
   setMemberRoleAction,
@@ -23,7 +28,7 @@ function Row({
 }: {
   label: string;
   onClick: () => void;
-  variant?: "ghost" | "danger" | "accent";
+  variant?: "ghost" | "danger" | "danger-solid" | "accent";
   disabled?: boolean;
 }) {
   return (
@@ -38,6 +43,9 @@ function Row({
         variant === "accent" && "bg-accent text-accent-contrast hover:bg-accent-strong",
         variant === "danger" &&
           "border border-danger/40 text-danger hover:bg-danger-soft",
+        // canvas flips with the theme, so it stays legible against the solid
+        // red in both schemes without needing a --danger-contrast token.
+        variant === "danger-solid" && "bg-danger text-canvas hover:opacity-90",
       )}
     >
       {label}
@@ -88,6 +96,7 @@ export function AlertActions({ alertId }: { alertId: string }) {
 export function MessageActions({ messageId }: { messageId: string }) {
   const { dict } = useI18n();
   const [removed, setRemoved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   if (removed) {
@@ -102,8 +111,10 @@ export function MessageActions({ messageId }: { messageId: string }) {
         disabled={pending}
         onClick={() =>
           startTransition(async () => {
+            setError(null);
             const result = await clearMessageAction({ messageId });
             if (result.ok) setRemoved(true);
+            else setError(result.error ?? dict.admin.noPermission);
           })
         }
       />
@@ -111,13 +122,66 @@ export function MessageActions({ messageId }: { messageId: string }) {
         label={dict.admin.remove}
         variant="danger"
         disabled={pending}
-        onClick={() =>
+        onClick={() => {
+          // chat_admin_delete is a hard delete with no undo, so it asks first.
+          if (!window.confirm(dict.admin.confirmDeleteMessage)) return;
+
           startTransition(async () => {
+            setError(null);
             const result = await deleteMessageAction({ messageId });
             if (result.ok) setRemoved(true);
-          })
-        }
+            else setError(result.error ?? dict.admin.noPermission);
+          });
+        }}
       />
+      {error && (
+        <span role="alert" className="text-[11px] text-danger">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Purge one moderation_log row.
+ *
+ * The wording matters more here than on a message delete: this row is the
+ * audit record, so the confirm says that the record goes too rather than
+ * implying only a list entry is being cleared.
+ */
+export function LogRowActions({ logId }: { logId: string }) {
+  const { dict } = useI18n();
+  const [removed, setRemoved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  if (removed) {
+    return <span className="text-[11px] text-faint">{dict.admin.removed}</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Row
+        label={dict.admin.deleteLogRow}
+        variant="danger"
+        disabled={pending}
+        onClick={() => {
+          if (!window.confirm(dict.admin.confirmDeleteLogRow)) return;
+
+          startTransition(async () => {
+            setError(null);
+            const result = await deleteModerationLogAction({ logId });
+            if (result.ok) setRemoved(true);
+            else setError(result.error ?? dict.admin.noPermission);
+          });
+        }}
+      />
+      {error && (
+        <span role="alert" className="text-[11px] text-danger">
+          {error}
+        </span>
+      )}
     </div>
   );
 }
@@ -225,5 +289,231 @@ export function RoleActions({
         </span>
       )}
     </div>
+  );
+}
+
+/** The word a bulk or account-level delete has to be spelled out. */
+const CONFIRM_WORD = "DELETE";
+
+/**
+ * Shared shell for the irreversible actions.
+ *
+ * `window.confirm` is one stray click away from wiping a member's history, so
+ * these two arm first: the button only reveals this panel, and the write only
+ * goes out once the word has been typed. `Cancel` forgets what was typed, so
+ * backing out and re-arming starts from blank rather than from a stale value
+ * that already satisfies the check.
+ */
+function ConfirmPanel({
+  warning,
+  detail,
+  confirmLabel,
+  pending,
+  error,
+  onConfirm,
+  onCancel,
+}: {
+  warning: string;
+  detail?: string;
+  confirmLabel: string;
+  pending: boolean;
+  error: string | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const { dict } = useI18n();
+  const [typed, setTyped] = useState("");
+  const armed = typed.trim().toUpperCase() === CONFIRM_WORD;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-danger/40 bg-danger-soft p-3">
+      <p className="text-xs font-medium text-danger">{warning}</p>
+      {detail && <p className="text-[11px] text-muted">{detail}</p>}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={typed}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={pending}
+          aria-label={interpolate(dict.admin.typeDeleteToConfirm, {
+            word: CONFIRM_WORD,
+          })}
+          onChange={(event) => setTyped(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && armed && !pending) onConfirm();
+          }}
+          placeholder={interpolate(dict.admin.typeDeleteToConfirm, {
+            word: CONFIRM_WORD,
+          })}
+          className="h-9 min-w-40 rounded-xl border border-line bg-surface px-3 text-xs uppercase outline-none transition placeholder:normal-case placeholder:text-faint focus:border-danger"
+        />
+        <Row
+          label={confirmLabel}
+          variant="danger-solid"
+          disabled={!armed || pending}
+          onClick={onConfirm}
+        />
+        <Row label={dict.admin.cancel} disabled={pending} onClick={onCancel} />
+      </div>
+
+      {error && (
+        <span role="alert" className="text-[11px] text-danger">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function NotificationActions({ notificationId }: { notificationId: string }) {
+  const { dict } = useI18n();
+  const [removed, setRemoved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  if (removed) {
+    return <span className="text-[11px] text-faint">{dict.admin.removed}</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Row
+        label={dict.admin.deleteNotification}
+        variant="danger"
+        disabled={pending}
+        onClick={() => {
+          if (!window.confirm(dict.admin.confirmDeleteNotification)) return;
+
+          startTransition(async () => {
+            setError(null);
+            const result = await deleteNotificationAction({ notificationId });
+            if (result.ok) setRemoved(true);
+            else setError(result.error ?? dict.admin.noPermission);
+          });
+        }}
+      />
+      {error && (
+        <span role="alert" className="text-[11px] text-danger">
+          {error}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Clear a member's whole notification history.
+ *
+ * `count` comes from the dossier the page already rendered, and it goes into
+ * the warning, so whoever clicks knows the size of the thing they are about to
+ * erase before arming rather than after.
+ */
+export function ClearAllNotificationsActions({
+  userId,
+  count,
+}: {
+  userId: string;
+  count: number;
+}) {
+  const { dict } = useI18n();
+  const [armed, setArmed] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  if (done) return <span className="text-[11px] text-accent">{done}</span>;
+
+  if (!armed) {
+    return (
+      <Row
+        label={dict.admin.clearAllNotifications}
+        variant="danger"
+        onClick={() => setArmed(true)}
+      />
+    );
+  }
+
+  return (
+    <ConfirmPanel
+      warning={interpolate(dict.admin.confirmClearAllNotifications, { n: count })}
+      confirmLabel={dict.admin.confirmAndDelete}
+      pending={pending}
+      error={error}
+      onCancel={() => {
+        setArmed(false);
+        setError(null);
+      }}
+      onConfirm={() =>
+        startTransition(async () => {
+          setError(null);
+          const result = await clearAllNotificationsAction({ userId });
+          if (result.ok) {
+            setArmed(false);
+            setDone(
+              interpolate(dict.admin.notificationsCleared, { n: result.deleted ?? 0 }),
+            );
+          } else setError(result.error ?? dict.admin.noPermission);
+        })
+      }
+    />
+  );
+}
+
+/**
+ * Delete a member's account outright.
+ *
+ * The heaviest thing in the console, so it gets the typed confirmation plus a
+ * note about what survives. On success there is no page left to render, so the
+ * component navigates back to the member list rather than leaving a dead
+ * dossier on screen.
+ */
+export function DeleteAccountActions({
+  userId,
+  displayName,
+}: {
+  userId: string;
+  displayName: string;
+}) {
+  const { dict } = useI18n();
+  const router = useRouter();
+  const [armed, setArmed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  if (!armed) {
+    return (
+      <Row
+        label={dict.admin.deleteAccount}
+        variant="danger"
+        onClick={() => setArmed(true)}
+      />
+    );
+  }
+
+  return (
+    <ConfirmPanel
+      warning={`${displayName} — ${dict.admin.deleteAccountWarning}`}
+      detail={dict.admin.deleteAccountKeepsLog}
+      confirmLabel={dict.admin.confirmAndDelete}
+      pending={pending}
+      error={error}
+      onCancel={() => {
+        setArmed(false);
+        setError(null);
+      }}
+      onConfirm={() =>
+        startTransition(async () => {
+          setError(null);
+          const result = await deleteMemberAccountAction({ userId });
+          if (result.ok) {
+            setArmed(false);
+            router.push("/admin/members");
+            router.refresh();
+          } else setError(result.error ?? dict.admin.noPermission);
+        })
+      }
+    />
   );
 }

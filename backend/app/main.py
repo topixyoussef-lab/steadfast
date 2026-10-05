@@ -42,6 +42,13 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-API-Token"],
 )
 
-app.include_router(health.router)
-app.include_router(moderation.router)
-app.include_router(panic.router)
+ROUTERS = (health.router, moderation.router, panic.router)
+
+for router in ROUTERS:
+    # Root paths are what uvicorn serves locally (Docker) and what the
+    # Next.js client expects.
+    app.include_router(router)
+    # Vercel mounts every function under /api, and a rewrite updates the URI
+    # before Mangum builds the ASGI scope, so the app has to answer the
+    # prefixed paths too or every request lands on a 404.
+    app.include_router(router, prefix="/api")

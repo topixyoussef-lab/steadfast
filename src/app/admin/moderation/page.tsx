@@ -1,9 +1,6 @@
-import { MessageActions } from "@/components/admin/admin-actions";
-import { Badge, EmptyNote, Section } from "@/components/admin/dossier-ui";
 import { requireStaff } from "@/lib/dal";
-import { alertSeverityLabel, moderationStatusLabel, relativeTime } from "@/lib/format";
+import { ModerationConsole } from "@/components/admin/moderation-console";
 import { createClient } from "@/lib/supabase/server";
-import { interpolate } from "@/lib/i18n/interpolate";
 import { getDictionary, getLocale } from "@/lib/i18n/server";
 
 export async function generateMetadata() {
@@ -43,67 +40,12 @@ export default async function AdminModerationPage() {
         <p className="text-sm text-muted">{dict.console.moderationIntro}</p>
       </header>
 
-      <Section
-        title={dict.admin.flaggedMessages}
-        count={flagged?.length ?? 0}
-        className="w-full"
-      >
-        {(flagged ?? []).length === 0 ? (
-          <EmptyNote>{dict.admin.nothingToReview}</EmptyNote>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {(flagged ?? []).map((message) => (
-              <li key={message.id} className="flex flex-col gap-2 rounded-xl border border-line p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone="warning">
-                    {moderationStatusLabel(message.moderation_status, dict)}
-                  </Badge>
-                  <span className="ms-auto text-xs text-faint">
-                    {relativeTime(message.created_at, dict, locale)}
-                  </span>
-                </div>
-                <p className="text-sm leading-relaxed">{message.content}</p>
-                <MessageActions messageId={message.id} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-
-      <Section title={dict.admin.user.moderationHistory} count={log?.length ?? 0}>
-        {(log ?? []).length === 0 ? (
-          <EmptyNote>{dict.admin.user.empty}</EmptyNote>
-        ) : (
-          <ul className="flex flex-col divide-y divide-line/50">
-            {(log ?? []).map((row) => (
-              <li key={row.id} className="flex flex-col gap-1 py-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone={row.status === "blocked" ? "danger" : "warning"}>
-                    {moderationStatusLabel(row.status, dict)}
-                  </Badge>
-                  <Badge tone="neutral">{alertSeverityLabel(row.severity, dict)}</Badge>
-                  {row.latency_ms !== null && (
-                    <span className="text-xs text-faint">
-                      {interpolate(dict.admin.user.latencyMs, { n: row.latency_ms })}
-                    </span>
-                  )}
-                  <span className="ms-auto text-xs text-faint">
-                    {relativeTime(row.created_at, dict, locale)}
-                  </span>
-                </div>
-                {row.content_preview && (
-                  <p className="text-sm text-muted">{row.content_preview}</p>
-                )}
-                {row.matched_terms?.length > 0 && (
-                  <p className="text-xs text-faint">
-                    {dict.admin.user.matchedTerms}: {row.matched_terms.join("، ")}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
+      <ModerationConsole
+        flagged={flagged ?? []}
+        log={log ?? []}
+        dict={dict}
+        locale={locale}
+      />
     </main>
   );
 }

@@ -6,11 +6,14 @@ import { cn } from "@/lib/cn";
 export function Section({
   title,
   count,
+  action,
   children,
   className,
 }: {
   title: string;
   count?: number;
+  /** Optional control in the header row, pushed to the trailing edge. */
+  action?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
@@ -21,12 +24,15 @@ export function Section({
         className,
       )}
     >
-      <h3 className="flex items-baseline gap-2 text-sm font-semibold tracking-tight">
-        {title}
-        {count !== undefined && (
-          <span className="text-xs font-normal text-muted">{count}</span>
-        )}
-      </h3>
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="flex items-baseline gap-2 text-sm font-semibold tracking-tight">
+          {title}
+          {count !== undefined && (
+            <span className="text-xs font-normal text-muted">{count}</span>
+          )}
+        </h3>
+        {action}
+      </div>
       {children}
     </section>
   );
