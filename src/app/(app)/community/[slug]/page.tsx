@@ -49,6 +49,8 @@ export default async function RoomPage({
 
   // Descending so the LIMIT keeps the newest 100 rows, then reversed so the
   // thread reads oldest-to-newest and the composer sits under the newest one.
+  // The .returns is needed because supabase-js reads the row shape from the type
+  // of the select string, and the ternary above is a union of literals.
   const [{ data: messages }, staffIds] = await Promise.all([
     supabase
       .from("chat_messages")
@@ -56,13 +58,12 @@ export default async function RoomPage({
       .eq("room_id", room.id)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
-      .limit(100),
+      .limit(100)
+      .returns<ChatMessage[]>(),
     getStaffUserIds(),
   ]);
 
-  // `as unknown`: supabase-js reads the row shape from the type of the select
-  // string, and the ternary above is a union of literals it cannot parse.
-  const initialMessages = [...(messages ?? [])].reverse() as unknown as ChatMessage[];
+  const initialMessages = [...(messages ?? [])].reverse();
 
   // The reaction table only arrives in 0006. An error just means no chips until
   // the migration is applied; the room still renders.
@@ -106,6 +107,7 @@ export default async function RoomPage({
         chatLocked={chatLocked}
         voiceEnabled={voiceEnabled}
         mediaEnabled={mediaEnabled}
+        mediaReady={mediaReady}
       />
     </main>
   );

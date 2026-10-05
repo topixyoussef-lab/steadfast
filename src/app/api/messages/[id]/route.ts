@@ -6,8 +6,10 @@ import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/dal";
 import { moderateMessage } from "@/lib/python-client";
 import { logModeration } from "@/lib/moderation-log";
-import { MESSAGE_COLUMNS } from "@/lib/chat";
+import { MESSAGE_COLUMNS, MESSAGE_COLUMNS_BASE } from "@/lib/chat";
+import { chatMediaReady } from "@/lib/chat-schema";
 import { MEDIA_BUCKET } from "@/lib/media";
+import type { ChatMessage } from "@/lib/types";
 
 const bodySchema = z.object({
   content: z.string().trim().min(1).max(2000, "Message is too long"),
@@ -25,7 +27,8 @@ const bodySchema = z.object({
  * The response re-selects with the shared `MESSAGE_COLUMNS`, attachments
  * included, because the client replaces its whole row with this object. A
  * narrower projection would silently strip the photo off a message whose
- * caption was just edited.
+ * caption was just edited. On a database that has not taken 0009 the embed is
+ * left off, since asking for it there is an error and the edit would fail.
  */
 export async function PATCH(
   request: Request,
@@ -59,11 +62,12 @@ export async function PATCH(
   // The user-scoped client is enough here: RLS only exposes visible messages,
   // so a soft-deleted one comes back as "not found" without a special case.
   const supabase = await createClient();
+  const mediaReady = await chatMediaReady();
   const { data: existing } = await supabase
     .from("chat_messages")
-    .select(MESSAGE_COLUMNS)
+    .select(mediaReady ? MESSAGE_COLUMNS : MESSAGE_COLUMNS_BASE)
     .eq("id", id)
-    .single();
+    .single<ChatMessage>();
 
   if (!existing) {
     return NextResponse.json({ error: "Unknown message" }, { status: 404 });
@@ -145,8 +149,8 @@ export async function PATCH(
     })
     .eq("id", id)
     .eq("user_id", profile.id)
-    .select(MESSAGE_COLUMNS)
-    .single();
+    .select(mediaReady ? MESSAGE_COLUMNS : MESSAGE_COLUMNS_BASE)
+    .single<ChatMessage>();
 
   if (updateError) {
     return NextResponse.json({ error: "Could not save that" }, { status: 500 });

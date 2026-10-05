@@ -11,7 +11,7 @@ import {
 } from "@/components/community/linkified-text";
 import { useI18n } from "@/components/i18n-provider";
 import { createClient } from "@/lib/supabase/client";
-import { MESSAGE_COLUMNS } from "@/lib/chat";
+import { MESSAGE_COLUMNS, MESSAGE_COLUMNS_BASE } from "@/lib/chat";
 import { clockTime, pseudonym } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import type { ChatAttachment, ChatMessage, MessageReaction } from "@/lib/types";
@@ -27,6 +27,13 @@ type Props = {
   chatLocked: boolean;
   voiceEnabled: boolean;
   mediaEnabled: boolean;
+  /**
+   * Whether this database has the 0009 columns. The server page already had to
+   * ask in order to read the room, and the poll has to match that answer:
+   * asking for the attachments embed on an un-migrated database is an error, so
+   * the poll would come back empty and the thread would stop updating.
+   */
+  mediaReady: boolean;
 };
 
 const EXCERPT = 90;
@@ -89,6 +96,7 @@ export function MessageThread({
   chatLocked,
   voiceEnabled,
   mediaEnabled,
+  mediaReady,
 }: Props) {
   const { dict, locale } = useI18n();
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
@@ -339,14 +347,15 @@ export function MessageThread({
 
       const { data } = await supabase
         .from("chat_messages")
-        .select(MESSAGE_COLUMNS)
+        .select(mediaReady ? MESSAGE_COLUMNS : MESSAGE_COLUMNS_BASE)
         .eq("room_id", roomId)
         .is("deleted_at", null)
         .gte("created_at", since)
         .order("created_at", { ascending: true })
-        .limit(50);
+        .limit(50)
+        .returns<ChatMessage[]>();
 
-      const rows = (data as ChatMessage[]) ?? [];
+      const rows = data ?? [];
       if (rows.length > 0) {
         // The watermark advances only on rows actually past it, otherwise the
         // overlap would walk it backwards one poll at a time.
@@ -364,15 +373,16 @@ export function MessageThread({
       // not drop that message at the bottom of the thread.
       const { data: edited } = await supabase
         .from("chat_messages")
-        .select(MESSAGE_COLUMNS)
+        .select(mediaReady ? MESSAGE_COLUMNS : MESSAGE_COLUMNS_BASE)
         .eq("room_id", roomId)
         .is("deleted_at", null)
         .gt("edited_at", editedSeenRef.current)
         .order("edited_at", { ascending: true })
-        .limit(50);
+        .limit(50)
+        .returns<ChatMessage[]>();
 
       const loaded = new Set(ids);
-      const edits = (edited as ChatMessage[]) ?? [];
+      const edits = edited ?? [];
       for (const row of edits) {
         if (row.edited_at) editedSeenRef.current = row.edited_at;
         if (loaded.has(row.id)) upsertMessage(row);
@@ -402,7 +412,7 @@ export function MessageThread({
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [roomId, upsertMessage]);
+  }, [roomId, upsertMessage, mediaReady]);
 
   // Only a new message should pull the view down. Deleting or editing an old
   // one must not yank the reader to the bottom of the room.

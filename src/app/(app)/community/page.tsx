@@ -25,16 +25,16 @@ export default async function CommunityPage() {
   // rows and the whole rooms list would render empty for the window between
   // deploying the code and applying the migration.
   const mediaReady = await chatMediaReady();
-  const { data } = await supabase
+  // .returns: supabase-js reads the row shape out of the *type* of the select
+  // string, and a ternary over two constants is a union of literals it cannot
+  // parse. RoomRow is the shape both branches return, spelled out next to the
+  // columns in src/lib/chat.ts.
+  const { data: rows } = await supabase
     .from("rooms")
     .select(mediaReady ? ROOM_COLUMNS : ROOM_COLUMNS_BASE)
-    .order("title");
-
-  // Cast rather than inferred: supabase-js reads the row shape out of the *type*
-  // of the select string, and a ternary over two constants is a union of literals
-  // it cannot parse. RoomRow is the shape both branches return, and it is spelled
-  // out next to the columns in src/lib/chat.ts.
-  const rooms = (data ?? []) as unknown as RoomRow[];
+    .order("title")
+    .returns<RoomRow[]>();
+  const rooms = rows ?? [];
 
   // The main hall is the live group chat, not a room like the others: it gets
   // its own box at the top of the page instead of a row in the room list.
