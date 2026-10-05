@@ -182,6 +182,20 @@ different SDKs. The build does not regenerate icon resources — only
 `generate-apk-icons.mjs` does, and it also refreshes `store_icon.png` so a later
 `bubblewrap update` cannot restore the old art.
 
+After every build, confirm the manifest URL in the artifact points at the
+deployment, not at a dev server:
+
+```bash
+aapt2 dump resources public/steadfast.apk | findstr /A:2 "string/webManifestUrl"
+```
+
+It must read `https://<host>/manifest.webmanifest`. Android Browser Helper uses
+that URL to fetch the web manifest and build the WebAPK on the device; a
+`http://localhost:<port>` value (which is what `bubblewrap update` writes when a
+local dev server is running) is unreachable from a phone, the WebAPK never
+builds, and every launch silently falls back to a Custom Tab — the app opens
+with a browser toolbar across the top instead of the web app full screen.
+
 Copy the result into the repo and release it like any other asset:
 
 ```bash
