@@ -1,15 +1,26 @@
 <#
 .SYNOPSIS
-  Applies the outstanding Supabase migrations for Steadfast (0003 and 0004).
+  Applies the outstanding Supabase migrations for Steadfast (0006 through 0009).
 
 .DESCRIPTION
   The service-role key cannot run DDL, and the SQL editor needs manual copy/paste.
-  This script connects straight to Postgres instead, so both migrations land in one
+  This script connects straight to Postgres instead, so every migration lands in one
   go and can be re-run safely after a password change.
 
   The database password is read as a SecureString and passed to psql through the
   PGPASSWORD environment variable, so it is never written to disk, never echoed,
   and never lands in this repo.
+
+  Every migration in the default set is written to be re-runnable: columns use
+  add column if not exists, policies and triggers are dropped before they are
+  created, and the storage bucket insert is an upsert. Running this twice is
+  therefore a no-op rather than an error, which is what makes a partial run
+  recoverable -- a failure leaves the earlier files applied, and the fix is to
+  run this again.
+
+  ON_ERROR_STOP is on, so a migration that fails aborts immediately and nothing
+  after it is applied. Read the error before re-running it: it is usually this
+  migration meeting a shape the previous one left behind, not a syntax problem.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\scripts\apply-migrations.ps1
@@ -17,6 +28,10 @@
 .EXAMPLE
   # Skip the password prompt if PGPASSWORD is already set in the environment.
   powershell -ExecutionPolicy Bypass -File .\scripts\apply-migrations.ps1
+
+.EXAMPLE
+  # Re-apply only the chat media migration.
+  powershell -ExecutionPolicy Bypass -File .\scripts\apply-migrations.ps1 -Migrations 0009_chat_media_and_room_locks.sql
 #>
 
 [CmdletBinding()]
@@ -26,9 +41,10 @@ param(
 
   # Migrations to apply, in order.
   [string[]]$Migrations = @(
-    "0003_phone_identity.sql",
-    "0004_admin_dossier.sql",
-    "0005_webauthn_passkeys.sql"
+    "0006_chat_upgrades.sql",
+    "0007_moderation_log_delete.sql",
+    "0008_notifications_delete.sql",
+    "0009_chat_media_and_room_locks.sql"
   )
 )
 
@@ -102,17 +118,25 @@ foreach ($name in $Migrations) {
 Write-Host ""
 Write-Host "Verifying ..." -ForegroundColor Cyan
 
+# Everything this script's default set is supposed to have left behind. Written
+# as one row per object so a failure names the thing that is missing rather than
+# just saying the migration did not stick.
 $verifySql = @"
-select
-  'webauthn_credentials=' || case when to_regclass('public.webauthn_credentials') is null then 'MISSING' else 'present' end,
-  'webauthn_challenges=' || case when to_regclass('public.webauthn_challenges') is null then 'MISSING' else 'present' end,
-  'normalize_phone='   || case when to_regproc('private.normalize_phone') is null then 'MISSING' else 'present' end,
-  'profiles_phone='    || case when exists (
-                                select 1 from information_schema.columns
-                                 where table_schema = 'public' and table_name = 'profiles' and column_name = 'phone'
-                              ) then 'present' else 'MISSING' end,
-  'passkey_rpc='       || case when to_regproc('public.passkey_user_id_for_phone') is null then 'MISSING' else 'present' end,
-  'admin_dossier_rpc='|| case when to_regproc('public.get_admin_user_detail') is null then 'MISSING' else 'present' end;
+select '0006 reactions='     || case when to_regclass('public.chat_message_reactions') is null then 'MISSING' else 'ok' end
+union all select '0007 moderation_log_delete=' || case when to_regproc('private.delete_moderation_log') is null then 'MISSING' else 'ok' end
+union all select '0008 notification_delete='    || case when to_regproc('private.delete_notification')  is null then 'MISSING' else 'ok' end
+union all select '0009 attachments_table='      || case when to_regclass('public.chat_message_attachments') is null then 'MISSING' else 'ok' end
+union all select '0009 attachment_kind='        || case when not exists (select 1 from pg_type where typname = 'attachment_kind') then 'MISSING' else 'ok' end
+union all select '0009 claim_rpc='              || case when to_regproc('public.claim_message_attachments') is null then 'MISSING' else 'ok' end
+union all select '0009 rooms_chat_locked='      || case when not exists (select 1 from information_schema.columns where table_schema='public' and table_name='rooms' and column_name='chat_locked') then 'MISSING' else 'ok' end
+union all select '0009 rooms_voice_enabled='    || case when not exists (select 1 from information_schema.columns where table_schema='public' and table_name='rooms' and column_name='voice_enabled') then 'MISSING' else 'ok' end
+union all select '0009 rooms_media_enabled='    || case when not exists (select 1 from information_schema.columns where table_schema='public' and table_name='rooms' and column_name='media_enabled') then 'MISSING' else 'ok' end
+union all select '0009 content_range_check='    || case when not exists (select 1 from pg_constraint where conrelid='public.chat_messages'::regclass and conname='chat_messages_content_range') then 'MISSING' else 'ok' end
+union all select '0009 attachments_read_policy=' || case when not exists (select 1 from pg_policies where schemaname='public' and tablename='chat_message_attachments' and policyname='attachments_read') then 'MISSING' else 'ok' end
+union all select '0009 locked_room_trigger='    || case when not exists (select 1 from pg_trigger where tgname='chat_messages_guard_locked_room') then 'MISSING' else 'ok' end
+union all select '0009 room_switch_trigger='     || case when not exists (select 1 from pg_trigger where tgname='rooms_guard_switches') then 'MISSING' else 'ok' end
+union all select '0009 chat_media_bucket='      || case when not exists (select 1 from storage.buckets where id='chat-media' and public = false) then 'MISSING' else 'ok' end
+union all select '0009 attachments_realtime='    || case when not exists (select 1 from pg_publication_tables where pubname='supabase_realtime' and tablename='chat_message_attachments') then 'MISSING' else 'ok' end;
 "@
 
 $check = & $psql.Source `
@@ -120,7 +144,18 @@ $check = & $psql.Source `
   --no-align --tuples-only --quiet `
   --command="$verifySql"
 
-Write-Host "  $check" -ForegroundColor DarkGray
+$check | ForEach-Object {
+  if ($_ -match 'MISSING') {
+    Write-Host "  $_" -ForegroundColor Red
+  } else {
+    Write-Host "  $_" -ForegroundColor DarkGray
+  }
+}
+
+if ($check -match 'MISSING') {
+  Write-Host ""
+  Write-Host "Something did not land. The migrations above are re-runnable, so fix the cause and run this again." -ForegroundColor Yellow
+}
 
 Write-Host ""
-Write-Host "Done. The fingerprint sign-in appears on /login on its own - no redeploy needed." -ForegroundColor Green
+Write-Host "Done. Attachments, room locks and the console switches are live as soon as the app is redeployed." -ForegroundColor Green

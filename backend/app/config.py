@@ -61,6 +61,21 @@ class Settings(BaseSettings):
     # slow third party in the critical path of every chat message.
     gemini_cooldown_seconds: float = Field(default=30.0, alias="GEMINI_COOLDOWN_SECONDS")
 
+    # Media goes to the same model as a separate request carrying inline bytes.
+    # It has a longer budget than text because a video has to be transferred and
+    # read, but the Next.js caller caps the whole exchange separately
+    # (MEDIA_CALL_TIMEOUT_MS), so this cannot hold a request open indefinitely.
+    gemini_media_timeout_seconds: float = Field(
+        default=12.0, alias="GEMINI_MEDIA_TIMEOUT_SECONDS"
+    )
+
+    # Hard ceiling on an attachment. Over this, judge_media returns no verdict
+    # and the upload is refused rather than sent blind. 4 MiB matches the
+    # chat-media bucket's file_size_limit.
+    gemini_media_max_bytes: int = Field(
+        default=4_194_304, alias="GEMINI_MEDIA_MAX_BYTES"
+    )
+
     # Only reached in "hybrid" mode, and only after the lexicon scores >= this.
     hybrid_escalate_score: float = Field(default=0.4, alias="HYBRID_ESCALATE_SCORE")
 

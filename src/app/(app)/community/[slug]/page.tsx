@@ -26,7 +26,9 @@ export default async function RoomPage({
   const supabase = await createClient();
   const { data: room } = await supabase
     .from("rooms")
-    .select("id, slug, title, description, is_private")
+    .select(
+      "id, slug, title, description, is_private, chat_locked, voice_enabled, media_enabled",
+    )
     .eq("slug", slug)
     .single<Room>();
 
@@ -48,8 +50,9 @@ export default async function RoomPage({
 
   const initialMessages = [...(messages ?? [])].reverse() as ChatMessage[];
 
-  // Pre-migration this table does not exist yet; an error just means no
-  // reaction chips until 0006 is applied.
+  // Pre-0009 the switches do not exist and come back null, and pre-0006 the
+  // reaction table does not. An error just means no chips until the migration is
+  // applied; the room still renders.
   const { data: reactions } = await supabase
     .from("chat_message_reactions")
     .select("id, message_id, user_id, emoji, created_at")
@@ -74,6 +77,11 @@ export default async function RoomPage({
         {room.description && (
           <p className="text-sm text-muted">{room.description}</p>
         )}
+        {room.chat_locked && (
+          <span className="w-fit rounded-full bg-danger-soft px-2.5 py-1 text-[11px] font-medium text-danger">
+            {dict.community.roomClosedBadge}
+          </span>
+        )}
       </header>
 
       <MessageThread
@@ -82,6 +90,9 @@ export default async function RoomPage({
         staffIds={staffIds}
         initialMessages={initialMessages}
         initialReactions={initialReactions}
+        chatLocked={room.chat_locked}
+        voiceEnabled={room.voice_enabled}
+        mediaEnabled={room.media_enabled}
       />
     </main>
   );

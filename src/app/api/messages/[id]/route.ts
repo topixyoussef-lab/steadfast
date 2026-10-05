@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/dal";
 import { moderateMessage } from "@/lib/python-client";
 import { logModeration } from "@/lib/moderation-log";
+import { MESSAGE_COLUMNS } from "@/lib/chat";
+import { MEDIA_BUCKET } from "@/lib/media";
 
 const bodySchema = z.object({
   content: z.string().trim().min(1).max(2000, "Message is too long"),
 });
-
-const MESSAGE_COLUMNS =
-  "id, room_id, user_id, content, is_flagged_by_ai, moderation_status, reply_to, created_at, edited_at, deleted_at";
 
 /**
  * Edit one of your own messages.
@@ -21,6 +21,11 @@ const MESSAGE_COLUMNS =
  * always runs Python moderation on the new text first, exactly like the post
  * route: an edit must not become a way to smuggle in words that would have
  * been blocked at post time.
+ *
+ * The response re-selects with the shared `MESSAGE_COLUMNS`, attachments
+ * included, because the client replaces its whole row with this object. A
+ * narrower projection would silently strip the photo off a message whose
+ * caption was just edited.
  */
 export async function PATCH(
   request: Request,
@@ -230,5 +235,54 @@ export async function DELETE(
     );
   }
 
+  // Now that the row is hidden, drop the bytes. This runs after the stamp and
+  // is deliberately best-effort: the failure that matters is a message staying
+  // visible with a dead file behind it, whereas an object that outlives its row
+  // is unreachable -- /api/media/[id] returns 404 once the parent message is
+  // gone, and no signed URL can be minted for a row RLS no longer exposes.
+  await deleteMessageObjects(admin, id);
+
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * Remove the stored files behind a soft-deleted message.
+ *
+ * The row is kept, not cascaded, so nothing here can be done by a foreign key.
+ * Staged rows are included too: a file whose caption failed to post still has
+ * bytes to reclaim, and leaving those behind is how the bucket fills up with
+ * files nobody can reach.
+ */
+async function deleteMessageObjects(
+  admin: SupabaseClient,
+  messageId: string,
+): Promise<void> {
+  const { data: attachments } = await admin
+    .from("chat_message_attachments")
+    .select("id, storage_path")
+    .eq("message_id", messageId);
+
+  if (!attachments || attachments.length === 0) return;
+
+  const { error } = await admin.storage
+    .from(MEDIA_BUCKET)
+    .remove(attachments.map((row) => row.storage_path as string));
+
+  // The objects are already unreachable through the app, so this is logged as
+  // the cost it is rather than raised as a failure the member would see.
+  if (error) {
+    console.warn(
+      `[media] could not remove ${attachments.length} object(s) for message ${messageId}:`,
+      error.message,
+    );
+    return;
+  }
+
+  // The attachment rows go too. Keeping them would let a member re-read a
+  // signed URL for bytes that are no longer there, and would keep the deleted
+  // file in the admin dossier's attachment count.
+  await admin
+    .from("chat_message_attachments")
+    .delete()
+    .eq("message_id", messageId);
 }

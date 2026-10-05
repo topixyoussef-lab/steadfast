@@ -19,7 +19,7 @@ export default async function CommunityPage() {
   const supabase = await createClient();
   const { data: rooms } = await supabase
     .from("rooms")
-    .select("id, slug, title, description, is_private")
+    .select("id, slug, title, description, is_private, chat_locked")
     .order("title");
 
   // The main hall is the live group chat, not a room like the others: it gets
@@ -58,7 +58,13 @@ export default async function CommunityPage() {
               )}
             </span>
             <span className="ms-auto shrink-0 text-sm font-medium text-accent">
-              {dict.community.open}
+              {chatRoom.chat_locked ? (
+                <span className="rounded-full bg-danger-soft px-2.5 py-1 text-[11px] font-medium text-danger">
+                  {dict.community.roomClosedBadge}
+                </span>
+              ) : (
+                dict.community.open
+              )}
             </span>
           </Link>
         </section>
@@ -97,7 +103,10 @@ function RoomList({
   rooms,
   dict,
 }: {
-  rooms: Pick<Room, "id" | "slug" | "title" | "description" | "is_private">[];
+  rooms: Pick<
+    Room,
+    "id" | "slug" | "title" | "description" | "is_private" | "chat_locked"
+  >[];
   dict: Dictionary;
 }) {
   if (rooms.length === 0) {
@@ -121,6 +130,11 @@ function RoomList({
               {room.is_private && (
                 <span className="rounded-full bg-sunken px-2 py-0.5 text-[11px] text-faint">
                   {dict.community.staffOnly}
+                </span>
+              )}
+              {room.chat_locked && (
+                <span className="rounded-full bg-danger-soft px-2 py-0.5 text-[11px] font-medium text-danger">
+                  {dict.roomControls.closed}
                 </span>
               )}
             </span>

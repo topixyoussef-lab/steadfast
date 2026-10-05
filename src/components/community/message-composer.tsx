@@ -2,10 +2,22 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import {
+  StagedAttachmentChip,
+} from "@/components/community/attachment-view";
+import { VoiceRecorder } from "@/components/community/voice-recorder";
 import { useI18n } from "@/components/i18n-provider";
 import { cn } from "@/lib/cn";
 import { interpolate } from "@/lib/i18n/interpolate";
-import type { ChatMessage } from "@/lib/types";
+import {
+  IMAGE_ACCEPT,
+  KIND_LIMITS,
+  VIDEO_ACCEPT,
+  accepts,
+  formatBytes,
+  type RecordedClip,
+} from "@/lib/media";
+import type { AttachmentKind, ChatAttachment, ChatMessage } from "@/lib/types";
 
 const MAX = 2000;
 const EDIT_EXCERPT = 90;
@@ -15,7 +27,22 @@ type Response = {
   error?: string;
   reason?: string;
   categories?: string[];
+  locked?: boolean;
   message?: ChatMessage;
+};
+
+/**
+ * What the composer is allowed to do in this room.
+ *
+ * Every value here is also checked on the server. Passing them down is so the
+ * member is not offered a button that will be refused: a voice note that turns
+ * into "voice notes are off in this room" after they recorded two minutes of it
+ * is a worse experience than a mic that was never there.
+ */
+export type ComposerPermissions = {
+  chatLocked: boolean;
+  voiceEnabled: boolean;
+  mediaEnabled: boolean;
 };
 
 export function MessageComposer({
@@ -24,18 +51,25 @@ export function MessageComposer({
   onClearReply,
   editing,
   onCancelEdit,
+  permissions,
 }: {
   roomId: string;
   replyTo: { id: string; author: string; excerpt: string } | null;
   onClearReply: () => void;
   editing: { id: string; content: string } | null;
   onCancelEdit: () => void;
+  permissions: ComposerPermissions;
 }) {
   const { dict } = useI18n();
   const [content, setContent] = useState("");
   const [pending, setPending] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [staged, setStaged] = useState<ChatAttachment[]>([]);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const [prevEditingId, setPrevEditingId] = useState<string | null>(null);
 
   // Entering edit mode loads the message into the composer; leaving it drops
@@ -48,6 +82,9 @@ export function MessageComposer({
     setPrevEditingId(editingId);
     setContent(editing?.content ?? "");
     setError(null);
+    // Files belong to the post that was being written, not to an edit of
+    // something already sent, so staging is cleared along with the draft.
+    setStaged([]);
   }
 
   useEffect(() => {
@@ -65,9 +102,84 @@ export function MessageComposer({
     }
   }, [editing]);
 
+  /**
+   * Send a file to the moderation route and keep the staged row it returns.
+   *
+   * This happens before the message is posted, and deliberately so: the file is
+   * reviewed and stored on its own, and the post that references it goes out
+   * afterwards. If the post then fails, the file is still staged and still only
+   * the member can see it, so the send can be retried without re-recording.
+   */
+  async function upload(kind: AttachmentKind, file: Blob, duration?: number) {
+    setUploading(true);
+    setError(null);
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+
+      const params = new URLSearchParams({ roomId, kind });
+      if (content.trim()) params.set("caption", content.trim());
+      if (duration !== undefined) {
+        params.set("duration", String(Math.round(duration)));
+      }
+
+      const response = await fetch(`/api/media/upload?${params}`, {
+        method: "POST",
+        body: form,
+      });
+
+      const data = (await response.json().catch(() => ({}))) as {
+        attachment?: ChatAttachment;
+        error?: string;
+        reason?: string;
+        locked?: boolean;
+      };
+
+      if (!response.ok || !data.attachment) {
+        setError(data.reason ?? data.error ?? dict.community.uploadFailed);
+        return false;
+      }
+
+      setStaged((prev) => {
+        // Four is the server's ceiling for one message, and the room between
+        // here and there is where a fifth gets refused.
+        const next = [...prev, data.attachment as ChatAttachment];
+        return next.slice(0, 4);
+      });
+      return true;
+    } catch {
+      setError(dict.community.sendNetworkFailed);
+      return false;
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function pickFile(kind: AttachmentKind, input: HTMLInputElement) {
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+
+    const mime = file.type.toLowerCase();
+    if (!accepts(kind, mime)) {
+      setError(interpolate(dict.community.wrongFileType, { kind }));
+      return;
+    }
+    if (file.size > KIND_LIMITS[kind]) {
+      setError(
+        interpolate(dict.community.fileTooLarge, { max: formatBytes(KIND_LIMITS[kind]) }),
+      );
+      return;
+    }
+
+    await upload(kind, file);
+  }
+
   async function send() {
     const text = content.trim();
-    if (!text || pending) return;
+    if (pending || uploading) return;
+    if (!text && staged.length === 0) return;
 
     setPending(true);
     setError(null);
@@ -83,7 +195,12 @@ export function MessageComposer({
           body: JSON.stringify(
             editing
               ? { content: text }
-              : { roomId, content: text, replyTo: replyTo?.id ?? null },
+              : {
+                  roomId,
+                  content: text,
+                  replyTo: replyTo?.id ?? null,
+                  attachments: staged.map((a) => a.id),
+                },
           ),
         },
       );
@@ -91,15 +208,20 @@ export function MessageComposer({
       const data: Response = await response.json().catch(() => ({}));
 
       if (!response.ok || !data.ok) {
-        setError(
-          data.reason ??
-            data.error ??
-            (editing ? dict.community.editFailed : dict.community.notPosted),
-        );
+        // A closed room is not a failure to report as one: the notice below
+        // already says it, so the error line stays quiet.
+        if (!data.locked) {
+          setError(
+            data.reason ??
+              data.error ??
+              (editing ? dict.community.editFailed : dict.community.notPosted),
+          );
+        }
         return;
       }
 
       setContent("");
+      setStaged([]);
       if (textareaRef.current) textareaRef.current.style.height = "auto";
 
       // The realtime echo arrives on its own; adding the returned row keeps
@@ -126,6 +248,17 @@ export function MessageComposer({
   }
 
   const remaining = MAX - content.length;
+  const canSend = content.trim().length > 0 || staged.length > 0;
+
+  if (permissions.chatLocked) {
+    return (
+      <div className="sticky bottom-0 flex flex-col gap-2 border-t border-line bg-canvas pt-4 pb-3 safe-b">
+        <p className="rounded-2xl border border-line bg-surface px-4 py-3 text-sm text-muted">
+          {dict.community.roomClosedNotice}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="sticky bottom-0 flex flex-col gap-2 border-t border-line bg-canvas pt-3 safe-b">
@@ -175,7 +308,93 @@ export function MessageComposer({
         </div>
       )}
 
+      {staged.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] text-faint">
+            {dict.community.stagedReady}
+          </span>
+          {staged.map((attachment) => (
+            <StagedAttachmentChip
+              key={attachment.id}
+              attachment={attachment}
+              busy={pending || uploading}
+              onRemove={() =>
+                setStaged((prev) => prev.filter((a) => a.id !== attachment.id))
+              }
+            />
+          ))}
+        </div>
+      )}
+
+      {uploading && (
+        <p className="text-[11px] text-muted" role="status">
+          {dict.community.checkingFile}
+        </p>
+      )}
+
       <div className="flex items-end gap-2">
+        {!editing && permissions.mediaEnabled && (
+          <>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept={IMAGE_ACCEPT}
+              className="sr-only"
+              onChange={(event) =>
+                void pickFile("image", event.currentTarget)
+              }
+            />
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={uploading || pending}
+              aria-label={dict.community.addImage}
+              title={dict.community.addImage}
+              className={cn(
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-line text-muted transition",
+                "hover:border-accent hover:text-accent",
+                "disabled:cursor-not-allowed disabled:opacity-40",
+              )}
+            >
+              <ImageGlyph />
+            </button>
+
+            <input
+              ref={videoInputRef}
+              type="file"
+              accept={VIDEO_ACCEPT}
+              className="sr-only"
+              onChange={(event) =>
+                void pickFile("video", event.currentTarget)
+              }
+            />
+            <button
+              type="button"
+              onClick={() => videoInputRef.current?.click()}
+              disabled={uploading || pending}
+              aria-label={dict.community.addVideo}
+              title={dict.community.addVideo}
+              className={cn(
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-line text-muted transition",
+                "hover:border-accent hover:text-accent",
+                "disabled:cursor-not-allowed disabled:opacity-40",
+              )}
+            >
+              <VideoGlyph />
+            </button>
+          </>
+        )}
+
+        {!editing && permissions.voiceEnabled && (
+          <VoiceRecorder
+            disabled={uploading || pending}
+            onError={setError}
+            onRecorded={(clip: RecordedClip) =>
+              void upload("audio", clip.blob, clip.durationSeconds)
+            }
+          />
+        )}
+
         <textarea
           ref={textareaRef}
           value={content}
@@ -185,8 +404,14 @@ export function MessageComposer({
             e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`;
           }}
           onKeyDown={(e) => {
-            // Enter sends on a keyboard, Shift+Enter breaks the line.
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            // Enter sends on a keyboard, Shift+Enter breaks the line. Not while
+            // a file is being checked, or the caption would post without it.
+            if (
+              e.key === "Enter" &&
+              !e.shiftKey &&
+              !e.nativeEvent.isComposing &&
+              !uploading
+            ) {
               e.preventDefault();
               void send();
             }
@@ -203,10 +428,11 @@ export function MessageComposer({
           aria-label={dict.community.ariaMessage}
           className="max-h-40 flex-1 resize-none rounded-2xl border border-line bg-surface px-4 py-3 text-base leading-relaxed focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
         />
+
         <button
           type="button"
           onClick={() => void send()}
-          disabled={pending || content.trim().length === 0}
+          disabled={pending || uploading || !canSend}
           aria-busy={pending}
           className={cn(
             "h-12 shrink-0 rounded-2xl px-5 text-sm font-semibold transition",
@@ -214,7 +440,11 @@ export function MessageComposer({
             "disabled:cursor-not-allowed disabled:opacity-40",
           )}
         >
-          {pending ? "…" : editing ? dict.community.saveEdit : dict.community.send}
+          {pending || uploading
+            ? "…"
+            : editing
+              ? dict.community.saveEdit
+              : dict.community.send}
         </button>
       </div>
 
@@ -222,8 +452,48 @@ export function MessageComposer({
         <span>{dict.community.checkedBeforePosting}</span>
         <span>
           {remaining < 200 ? interpolate(dict.community.charsLeft, { n: remaining }) : ""}
+          {staged.length > 0
+            ? ` · ${interpolate(dict.community.filesChosen, { n: staged.length })}`
+            : ""}
         </span>
       </div>
     </div>
+  );
+}
+
+function ImageGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden
+    >
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <circle cx="8.5" cy="10" r="1.6" />
+      <path d="m4 17 4.5-4.5 3.5 3.5 3-3 5 5" />
+    </svg>
+  );
+}
+
+function VideoGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden
+    >
+      <rect x="2.5" y="5.5" width="13" height="13" rx="2.5" />
+      <path d="m15.5 10.5 6-3.5v10l-6-3.5z" />
+    </svg>
   );
 }

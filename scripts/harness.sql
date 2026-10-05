@@ -18,6 +18,7 @@ end $$;
 
 create schema if not exists auth;
 create schema if not exists extensions;
+create schema if not exists storage;
 
 -- auth.users is only ever referenced as a foreign key target here.
 create table if not exists auth.users (
@@ -44,6 +45,30 @@ as $$
 $$;
 
 grant usage on schema auth, public, extensions to anon, authenticated, service_role;
+
+-- The storage catalog, shaped like Supabase's. 0009 creates the chat-media
+-- bucket and grants on storage.objects, so without these two tables the
+-- migration stops at the first statement that is not a no-op. Only the columns
+-- the migrations actually touch are here.
+create table if not exists storage.buckets (
+  id                 text primary key,
+  name               text not null,
+  public             boolean not null default false,
+  file_size_limit    bigint,
+  allowed_mime_types text[]
+);
+
+create table if not exists storage.objects (
+  id         uuid primary key default gen_random_uuid(),
+  bucket_id  text references storage.buckets (id),
+  name       text not null,
+  owner      uuid,
+  metadata   jsonb
+);
+
+grant usage on schema storage to anon, authenticated, service_role;
+grant select, insert, update, delete on storage.buckets to service_role;
+grant select, insert, update, delete on storage.objects to service_role;
 
 -- Supabase provisions this publication on every project.
 do $$ begin

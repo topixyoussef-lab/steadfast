@@ -33,6 +33,19 @@ class ModerateResponse(BaseModel):
     request_id: str | None = None
 
 
+class MediaModerateResponse(ModerateResponse):
+    """A verdict on an attachment.
+
+    `transcript` is populated for audio and `description` for image and video,
+    because one is the readable content and the other stands in for it. Both are
+    stored on the attachment row so a moderator can review without opening the
+    file, and so moderation_log keeps a text preview of a post that had no text.
+    """
+
+    transcript: str = ""
+    description: str = ""
+
+
 class PanicRequest(BaseModel):
     urge_level: int = Field(ge=0, le=10)
     preference_type: PreferenceType | None = None

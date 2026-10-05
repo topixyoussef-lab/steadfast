@@ -11,6 +11,15 @@ import "server-only";
 
 const TIMEOUT_MS = 4000;
 
+/**
+ * Media gets its own budget. An inline image or a short clip has to be
+ * transferred and then read by the model, which is not the same job as scoring
+ * a sentence, and the alternative is a timeout that turns into a refused upload.
+ * It is still bounded: this is the only slow call in the app, and the route that
+ * uses it is the only place a member can spend that wait.
+ */
+const MEDIA_TIMEOUT_MS = 25_000;
+
 export type Decision = "allow" | "flag" | "block";
 
 export type ModerateResult = {
@@ -66,6 +75,43 @@ async function call<T>(path: string, body: unknown): Promise<T | null> {
   }
 }
 
+/**
+ * The media call carries raw bytes as the request body with the metadata in
+ * headers, rather than base64 in a JSON body, which would inflate a 4 MB clip by
+ * a third before it left this process.
+ *
+ * A null return means "no verdict could be obtained" and the caller must refuse
+ * the upload. That is not the same contract as moderateMessage, where null means
+ * "fall back to the lexicon" -- there is no lexicon that can read a photograph,
+ * so the honest answer to an unreadable attachment is to not publish it.
+ */
+async function callMedia<T>(
+  bytes: ArrayBuffer,
+  headers: Record<string, string>,
+): Promise<T | null> {
+  const { url, token } = config();
+  if (!url || !token) return null;
+
+  try {
+    const response = await fetch(`${url}/moderate/media`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-API-Token": token,
+        ...headers,
+      },
+      body: bytes,
+      signal: AbortSignal.timeout(MEDIA_TIMEOUT_MS),
+      cache: "no-store",
+    });
+
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 export function moderateMessage(
   content: string,
   meta: {
@@ -79,6 +125,37 @@ export function moderateMessage(
     user_id: meta.userId,
     room_id: meta.roomId,
     preference_type: meta.preferenceType,
+  });
+}
+
+export type MediaModerateResult = {
+  decision: Decision;
+  severity: "info" | "warning" | "critical";
+  categories: string[];
+  reason: string;
+  engine: string;
+  latency_ms: number;
+  request_id: string;
+  /** What the model heard, for audio. */
+  transcript: string;
+  /** What the model saw, for image and video. */
+  description: string;
+};
+
+export function moderateMedia(
+  bytes: ArrayBuffer,
+  input: {
+    kind: "image" | "audio" | "video";
+    mimeType: string;
+    caption?: string;
+  },
+): Promise<MediaModerateResult | null> {
+  return callMedia<MediaModerateResult>(bytes, {
+    "X-Media-Kind": input.kind,
+    "X-Media-Mime": input.mimeType,
+    // The caption is bounded server-side too; this only keeps a stray newline
+    // out of a header value, which some hosts reject.
+    "X-Media-Caption": (input.caption ?? "").replace(/[\r\n]+/g, " ").slice(0, 2000),
   });
 }
 

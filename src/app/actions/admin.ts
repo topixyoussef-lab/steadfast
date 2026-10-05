@@ -406,3 +406,101 @@ export async function deleteMemberAccountAction(input: {
   revalidatePath("/admin/members");
   return { ok: true };
 }
+
+// ============================================================
+// Room switches
+// ============================================================
+// Three independent switches per room, all of which are read on the server by
+// both /api/moderate and /api/media/upload. Hiding a button is a courtesy to
+// the member; these rows are the control.
+//
+//   chat_locked    the room takes no new messages from anybody, staff included.
+//                  Reading is untouched: the room and its history stay visible.
+//   voice_enabled  the room takes no voice notes. Ignored when chat_locked.
+//   media_enabled  the room takes no photos or videos. Ignored when chat_locked.
+//
+// chat_locked is the one that is deliberately not a moderation setting: it does
+// not change what is allowed, it stops anything being posted at all.
+
+const roomSwitchSchema = z.object({
+  roomId: z.string().uuid(),
+  value: z.boolean(),
+});
+
+type RoomSwitch = "chat_locked" | "voice_enabled" | "media_enabled";
+
+/**
+ * Shared body for the three switches.
+ *
+ * Admin only, matching setMemberRoleAction: a moderator can act on members and
+ * on messages, but closing a room is a decision about who gets to speak, so it
+ * sits with the same role that can hand out privileges. Note that
+ * `rooms_admin_write` itself is `private.is_admin()`, which includes
+ * moderators -- this check is what makes it narrower than that policy, and it is
+ * the server, so it is the part that actually holds.
+ *
+ * The write runs on the user client rather than service_role, so a policy that
+ * stops covering rooms would make these fail closed rather than quietly bypass
+ * it, and `.select("id")` turns "matched nothing" into an explicit failure
+ * instead of a silent no-op that reports success.
+ */
+async function setRoomSwitch(
+  column: RoomSwitch,
+  input: { roomId: string; value: boolean },
+): Promise<{ ok: boolean; error?: string }> {
+  const parsed = roomSwitchSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Unknown room" };
+
+  const staff = await requireStaff();
+  if (staff.role !== "admin") {
+    return { ok: false, error: "Only admins can change room settings" };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("rooms")
+    .update({ [column]: parsed.data.value })
+    .eq("id", parsed.data.roomId)
+    .select("id");
+
+  if (error) return { ok: false, error: error.message };
+  if (didNotApply(data)) return { ok: false, error: "That room could not be updated" };
+
+  revalidatePath("/admin/rooms");
+  revalidatePath("/community");
+  // The list of rooms and every individual room page read the same row, and the
+  // slug of the room that changed is not known here, so the whole segment is
+  // invalidated rather than a path that happens to match one room.
+  revalidatePath("/community", "layout");
+  return { ok: true };
+}
+
+export async function setRoomChatLockedAction(input: {
+  roomId: string;
+  locked: boolean;
+}) {
+  return setRoomSwitch("chat_locked", {
+    roomId: input.roomId,
+    value: input.locked,
+  });
+}
+
+export async function setRoomVoiceEnabledAction(input: {
+  roomId: string;
+  enabled: boolean;
+}) {
+  return setRoomSwitch("voice_enabled", {
+    roomId: input.roomId,
+    value: input.enabled,
+  });
+}
+
+export async function setRoomMediaEnabledAction(input: {
+  roomId: string;
+  enabled: boolean;
+}) {
+  return setRoomSwitch("media_enabled", {
+    roomId: input.roomId,
+    value: input.enabled,
+  });
+}

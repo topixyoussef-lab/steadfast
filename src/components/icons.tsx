@@ -57,6 +57,49 @@ export function BriefcaseIcon(props: IconProps) {
   );
 }
 
+/**
+ * A door rather than a padlock: a padlock reads as "this is the locked room"
+ * even when the room is currently open, which is the wrong signal on a button
+ * that toggles the lock.
+ */
+export function DoorIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 21V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17" />
+      <path d="M16 21h4" />
+      <path d="M3 21h18" />
+      <circle cx="12.5" cy="12" r="0.75" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function MicIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <path d="M12 18v3" />
+    </svg>
+  );
+}
+
+export function CameraIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M3 8a2 2 0 0 1 2-2h2l1.2-2h7.6L17 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </svg>
+  );
+}
+
+export function PaperclipIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M20 11.5 12 19.4a5 5 0 0 1-7-7l8.3-8.3a3.4 3.4 0 0 1 4.8 4.8l-8.3 8.3a1.8 1.8 0 0 1-2.5-2.5l7.5-7.5" />
+    </svg>
+  );
+}
+
 export function ShieldIcon(props: IconProps) {
   return (
     <svg {...base(props)}>

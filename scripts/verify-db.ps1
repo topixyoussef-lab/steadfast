@@ -41,7 +41,17 @@ New-Item -ItemType Directory -Path $work -Force | Out-Null
 
 $conn = @("-h", $Host_, "-p", "$Port", "-U", $User)
 
-$migrations = @("0001_init", "0002_job_loop")
+$migrations = @(
+  "0001_init",
+  "0002_job_loop",
+  "0003_phone_identity",
+  "0004_admin_dossier",
+  "0005_webauthn_passkeys",
+  "0006_chat_upgrades",
+  "0007_moderation_log_delete",
+  "0008_notifications_delete",
+  "0009_chat_media_and_room_locks"
+)
 
 if (-not $NoSubstitute) {
   Write-Output "== rewriting 'execute function' as 'execute procedure' =="

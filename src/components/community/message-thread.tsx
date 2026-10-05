@@ -4,12 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { MessageComposer } from "@/components/community/message-composer";
+import { AttachmentView } from "@/components/community/attachment-view";
+import {
+  LinkifiedText,
+  messagePreview,
+} from "@/components/community/linkified-text";
 import { useI18n } from "@/components/i18n-provider";
 import { createClient } from "@/lib/supabase/client";
 import { MESSAGE_COLUMNS } from "@/lib/chat";
 import { clockTime, pseudonym } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import type { ChatMessage, MessageReaction } from "@/lib/types";
+import type { ChatAttachment, ChatMessage, MessageReaction } from "@/lib/types";
 
 type ReplyTarget = { id: string; author: string; excerpt: string };
 
@@ -19,6 +24,9 @@ type Props = {
   staffIds: string[];
   initialMessages: ChatMessage[];
   initialReactions: MessageReaction[];
+  chatLocked: boolean;
+  voiceEnabled: boolean;
+  mediaEnabled: boolean;
 };
 
 const EXCERPT = 90;
@@ -26,13 +34,27 @@ const EXCERPT = 90;
 /** How often the thread re-reads the database for rows Realtime may not have delivered. */
 const POLL_MS = 8000;
 
+/**
+ * How far back each poll re-reads.
+ *
+ * Posting writes the message row and then claims its attachments, and the two
+ * are separate statements. A poll landing between them reads a message with no
+ * attachments and would never look at that row again, since the watermark only
+ * moves forward -- leaving a photo that appears on reload and nowhere else. A
+ * two-second overlap closes that window for the cost of re-reading the last
+ * second or so of traffic, and `upsertMessage` makes the overlap a no-op for
+ * rows that have not changed.
+ */
+const POLL_OVERLAP_MS = 2000;
+
 /** Must match the CHECK constraint on chat_message_reactions.emoji (0006). */
 const REACTION_SET = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 type ReactionGroup = { emoji: string; count: number; mine: boolean };
 
 /**
- * Realtime thread, composer, reply state, reactions, and message actions.
+ * Realtime thread, composer, reply state, reactions, attachments, and message
+ * actions.
  *
  * The server sends the newest page oldest-first for reading order, and the
  * realtime channel appends new arrivals. Ids are deduplicated because the
@@ -47,6 +69,13 @@ type ReactionGroup = { emoji: string; count: number; mine: boolean };
  *    its owner, so nobody else would hear about it.
  * Broadcast payloads carry ids only, never message content.
  *
+ * Attachments need care of their own. A realtime INSERT on chat_messages carries
+ * the message columns and nothing else, so a naive upsert would replace a row
+ * that has files attached with one that appears to have none, and the picture
+ * would vanish from under the member who just posted it. The upsert therefore
+ * keeps whichever copy actually has attachments, and a second channel on
+ * chat_message_attachments carries a file that arrives on its own.
+ *
  * Reply targets are kept out of the message list itself. A quoted parent is
  * resolved from the loaded page by id, so replying to a message that is not
  * loaded is refused rather than leaving a dangling quote.
@@ -57,6 +86,9 @@ export function MessageThread({
   staffIds,
   initialMessages,
   initialReactions,
+  chatLocked,
+  voiceEnabled,
+  mediaEnabled,
 }: Props) {
   const { dict, locale } = useI18n();
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
@@ -99,20 +131,65 @@ export function MessageThread({
     setPickerFor((prev) => (prev === id ? null : prev));
   }, []);
 
+  /**
+   * Merge an incoming copy of a message.
+   *
+   * The attachment rule is the reason this is not a plain assignment. A realtime
+   * event on chat_messages carries no `attachments`, so writing it over a row
+   * that has them would make a just-posted photo disappear until the next poll.
+   * The row that has attachments wins unless the incoming copy has some too.
+   */
   const upsertMessage = useCallback(
     (row: ChatMessage) => {
       if (row.deleted_at) {
         dropMessage(row.id);
         return;
       }
-      setMessages((prev) =>
-        prev.some((m) => m.id === row.id)
-          ? prev.map((m) => (m.id === row.id ? row : m))
-          : [...prev, row],
-      );
+      setMessages((prev) => {
+        const existing = prev.find((m) => m.id === row.id);
+        const merged =
+          existing && (existing.attachments?.length ?? 0) > 0 &&
+          (row.attachments?.length ?? 0) === 0
+            ? { ...row, attachments: existing.attachments }
+            : row;
+        return existing
+          ? prev.map((m) => (m.id === merged.id ? merged : m))
+          : [...prev, merged];
+      });
     },
     [dropMessage],
   );
+
+  /** A file that arrives on its own, or is removed with its message. */
+  const upsertAttachment = useCallback(
+    (row: ChatAttachment) => {
+      if (!row.message_id) return; // staged: not in any message yet
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== row.message_id) return m;
+          const list = m.attachments ?? [];
+          const already = list.some((a) => a.id === row.id);
+          return {
+            ...m,
+            attachments: already
+              ? list.map((a) => (a.id === row.id ? row : a))
+              : [...list, row],
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+  const dropAttachment = useCallback((id: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        (m.attachments ?? []).some((a) => a.id === id)
+          ? { ...m, attachments: (m.attachments ?? []).filter((a) => a.id !== id) }
+          : m,
+      ),
+    );
+  }, []);
 
   const addReaction = useCallback((row: MessageReaction) => {
     setReactions((prev) =>
@@ -199,6 +276,30 @@ export function MessageThread({
           if (old) dropReaction(old);
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "chat_message_attachments",
+          // UPDATE, not INSERT: the row was inserted by the upload route while
+          // it was still staged and the claim is the UPDATE that attaches it to
+          // a message. Filtering on message_id being non-null is therefore also
+          // the RLS boundary -- a staged file is invisible to everyone but its
+          // uploader, so an unfiltered INSERT would only ever deliver the uploader
+          // their own half-finished upload and nothing useful to anyone else.
+          filter: "message_id=not.is.null",
+        },
+        (payload) => upsertAttachment(payload.new as ChatAttachment),
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "chat_message_attachments" },
+        (payload) => {
+          const old = payload.old as Partial<ChatAttachment>;
+          if (old?.id) dropAttachment(old.id);
+        },
+      )
       .on("broadcast", { event: "message-deleted" }, ({ payload }) => {
         const id = (payload as { id?: string } | null)?.id;
         if (id) dropMessage(id);
@@ -215,7 +316,7 @@ export function MessageThread({
       channelRef.current = null;
       void supabase.removeChannel(channel);
     };
-  }, [roomId, upsertMessage, dropMessage, addReaction, dropReaction]);
+  }, [roomId, upsertMessage, dropMessage, addReaction, dropReaction, upsertAttachment, dropAttachment]);
 
   // A channel can report SUBSCRIBED and still deliver nothing, which is what a
   // table missing from the supabase_realtime publication looks like. This pulls
@@ -228,18 +329,29 @@ export function MessageThread({
     const supabase = createClient();
 
     async function poll() {
+      // `gte` against a watermark pulled back by POLL_OVERLAP_MS rather than
+      // `gt` against the last row seen: a message written a moment before the
+      // claim of its attachments would otherwise be read once, without them, and
+      // never again.
+      const since = new Date(
+        Date.parse(lastSeenRef.current) - POLL_OVERLAP_MS,
+      ).toISOString();
+
       const { data } = await supabase
         .from("chat_messages")
         .select(MESSAGE_COLUMNS)
         .eq("room_id", roomId)
         .is("deleted_at", null)
-        .gt("created_at", lastSeenRef.current)
+        .gte("created_at", since)
         .order("created_at", { ascending: true })
         .limit(50);
 
       const rows = (data as ChatMessage[]) ?? [];
       if (rows.length > 0) {
-        lastSeenRef.current = rows[rows.length - 1].created_at;
+        // The watermark advances only on rows actually past it, otherwise the
+        // overlap would walk it backwards one poll at a time.
+        const newest = rows[rows.length - 1].created_at;
+        if (newest > lastSeenRef.current) lastSeenRef.current = newest;
         for (const row of rows) upsertMessage(row);
       }
 
@@ -375,7 +487,12 @@ export function MessageThread({
         message.user_id === currentUserId
           ? dict.community.youLower
           : pseudonym(message.user_id, dict),
-      excerpt: message.content.slice(0, EXCERPT),
+      // A file-only message has no text to quote, so the preview says what it
+      // is instead of showing an empty line.
+      excerpt:
+        message.content.trim().length > 0
+          ? messagePreview(message.content, EXCERPT)
+          : dict.community.attachmentSummary,
     });
   }
 
@@ -505,6 +622,16 @@ export function MessageThread({
   return (
     <>
       <div className="flex flex-1 flex-col gap-4">
+        {/* Nothing is said about a locked room here on purpose. The composer
+            takes the bottom of the thread and replaces itself with that notice,
+            and a second copy floating above the history would be the same
+            sentence twice on one screen. */}
+        {!chatLocked && !voiceEnabled && (
+          <p className="text-center text-[11px] text-faint">
+            {dict.community.voiceOffNotice}
+          </p>
+        )}
+
         {!live && (
           <p className="text-center text-[11px] text-faint">
             {dict.community.reconnecting}
@@ -538,6 +665,8 @@ export function MessageThread({
                   ? byId.get(message.reply_to)
                   : undefined;
               const groups = reactionGroups.get(message.id) ?? [];
+              const attachments = message.attachments ?? [];
+              const hasFiles = attachments.length > 0;
 
               return (
                 <li key={message.id} className="flex flex-col gap-1">
@@ -573,7 +702,9 @@ export function MessageThread({
                         )}
                       </span>
                       <span className="truncate text-xs text-faint">
-                        {parent.content.slice(0, EXCERPT)}
+                        {hasFiles
+                          ? dict.community.attachmentSummary
+                          : parent.content.slice(0, EXCERPT)}
                       </span>
                     </button>
                   )}
@@ -590,7 +721,24 @@ export function MessageThread({
                       message.is_flagged_by_ai && "border-warning/40",
                     )}
                   >
-                    {message.content}
+                    {message.content && <LinkifiedText text={message.content} />}
+
+                    {attachments.length > 0 && (
+                      <div
+                        className={cn(
+                          "flex flex-col gap-2",
+                          message.content && "mt-2 pt-2 border-t border-line/60",
+                        )}
+                      >
+                        {attachments.map((attachment) => (
+                          <AttachmentView
+                            key={attachment.id}
+                            attachment={attachment}
+                            mine={mine}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {groups.length > 0 && (
@@ -693,6 +841,7 @@ export function MessageThread({
         onClearReply={() => setReplyTo(null)}
         editing={editing}
         onCancelEdit={() => setEditing(null)}
+        permissions={{ chatLocked, voiceEnabled, mediaEnabled }}
       />
     </>
   );

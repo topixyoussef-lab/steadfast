@@ -39,7 +39,16 @@ app.add_middleware(
     allow_origins=settings.allowed_origins,
     allow_credentials=False,
     allow_methods=["POST", "GET"],
-    allow_headers=["Content-Type", "X-API-Token"],
+    # The media endpoint carries its metadata in headers rather than a JSON
+    # body, so those three have to be allowed even though every real caller is
+    # the Next.js server and never a browser.
+    allow_headers=[
+        "Content-Type",
+        "X-API-Token",
+        "X-Media-Kind",
+        "X-Media-Mime",
+        "X-Media-Caption",
+    ],
 )
 
 ROUTERS = (health.router, moderation.router, panic.router)

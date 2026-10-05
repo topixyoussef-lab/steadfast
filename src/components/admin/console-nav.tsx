@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   BriefcaseIcon,
   ChatIcon,
+  DoorIcon,
   ShieldIcon,
   UsersIcon,
 } from "@/components/icons";
@@ -23,6 +24,7 @@ const ITEMS: ConsoleItem[] = [
   { href: "/admin", icon: ShieldIcon, labelKey: "overview" },
   { href: "/admin/members", icon: UsersIcon, labelKey: "members" },
   { href: "/admin/moderation", icon: ChatIcon, labelKey: "moderation" },
+  { href: "/admin/rooms", icon: DoorIcon, labelKey: "rooms" },
   { href: "/admin/jobs", icon: BriefcaseIcon, labelKey: "jobs" },
 ];
 
@@ -42,7 +44,7 @@ export function ConsoleNav({ dict }: { dict: Dictionary }) {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                // Equal columns below `lg`: the four labels together need more
+                // Equal columns below `lg`: the five labels together need more
                 // than a phone gives, and this list has no scroll container, so
                 // a row of shrink-0 items used to push past the page edge.
                 "flex flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-center text-[10px] leading-tight transition",

@@ -61,11 +61,13 @@ const en = {
     members: "Members",
     moderation: "Moderation",
     jobs: "Jobs",
+    rooms: "Rooms",
     backToApp: "Back to app",
     overviewIntro: "Open SOS alerts first. Everything else can wait.",
     membersIntro: "Open a member for their full record.",
     moderationIntro: "Messages the AI flagged, and the moderation log behind them.",
     jobsIntro: "Every listing on the board, newest first.",
+    roomsIntro: "Close a room to new messages, or turn off what it accepts.",
   },
 
   /** Prompt shown when a newer build is deployed than the one still running. */
@@ -333,6 +335,44 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
     deleteFailed: "Could not delete the message. Try again.",
     staffRooms: "Staff rooms",
     userRooms: "Member rooms",
+
+    // A closed room is read-only, and the copy says so rather than showing a
+    // composer that would be refused.
+    roomClosedBadge: "Closed to new messages",
+    roomClosedNotice:
+      "This room is closed to new messages. You can still read everything here.",
+
+    // Media
+    addImage: "Add a photo",
+    addVideo: "Add a video",
+    voiceStart: "Record a voice note",
+    voiceStop: "Stop recording",
+    voicePermissionDenied:
+      "Microphone access is blocked. Turn it on for this app in your device settings, then try again.",
+    voiceNoMicrophone: "No microphone was found on this device.",
+    voiceUnsupported: "This device cannot record audio in a supported format.",
+    voiceUnavailable: "Recording is not available in this browser.",
+    voiceFailed: "The recording failed. Please try again.",
+    voiceEmpty: "Nothing was recorded. Please try again.",
+    voiceOffNotice: "Voice notes are turned off in this room.",
+    checkingFile: "Checking the file before posting…",
+    stagedReady: "Ready to post:",
+    filesChosen: "{n} file(s)",
+    removeAttachment: "Remove this file",
+    uploadFailed: "That file could not be posted. Please try again.",
+    wrongFileType: "That cannot be sent as {kind}.",
+    fileTooLarge: "That file is too large. The limit is {max}.",
+    attachmentPlay: "Play voice note",
+    attachmentPause: "Pause voice note",
+    attachmentTranscript: "Heard",
+    attachmentImage: "Photo",
+    attachmentVideo: "Video",
+    attachmentVoice: "Voice note",
+    attachmentImageAlt: "Photo posted in this room",
+    attachmentVideoUnsupported: "This device cannot play that video.",
+    attachmentUnavailable: "That file could not be loaded.",
+    attachmentFlagged: "A moderator is reviewing this file.",
+    attachmentSummary: "a file",
   },
 
   jobs: {
@@ -422,6 +462,24 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
     couldNotClose: "Could not close this job",
     yourPosting: "Your listing",
     applicant: "Applicant",
+  },
+
+  roomControls: {
+    title: "Room controls",
+    intro:
+      "Closing a room stops every new message in it, staff included. Reading is never affected.",
+    chatLocked: "Open to posting",
+    voiceEnabled: "Voice notes",
+    mediaEnabled: "Photos and video",
+    closed: "Closed",
+    open: "Open",
+    lockRoom: "Close the room",
+    unlockRoom: "Reopen the room",
+    confirmLockRoom:
+      "Close this room? Nobody can post in it until you reopen it. The history stays readable.",
+    staffOnlyBadge: "Staff room",
+    noRooms: "No rooms yet.",
+    saved: "Saved",
   },
 
   admin: {
@@ -885,11 +943,13 @@ const ar: Dictionary = {
     members: "الأعضاء",
     moderation: "الرقابة",
     jobs: "الأعمال",
+    rooms: "الغرف",
     backToApp: "رجوع للتطبيق",
     overviewIntro: "استغاثات SOS المفتوحة أولاً، وباقي الأمور بعدين.",
     membersIntro: "افتح أي عضو لعرض ملفه الكامل.",
     moderationIntro: "الرسائل اللي الذكاء الاصطناعي علّمها، وسجل الرقابة وراها.",
     jobsIntro: "كل الإعلانات الموجودة، الأحدث أولاً.",
+    roomsIntro: "اقفل غرفة من الرسائل الجديدة، أو أوقف اللي هيستقبله.",
   },
 
   update: {
@@ -1152,6 +1212,43 @@ const ar: Dictionary = {
     deleteFailed: "تعذّر حذف الرسالة. جرّب مرة تانية.",
     staffRooms: "غرف الفريق",
     userRooms: "غرف الأعضاء",
+
+    // غرفة مقفولة: القراءة شغالة والكتابة لأ، والنص بيقول كده بدل ما يورّيه
+    // زرار هيترفض من السيرفر.
+    roomClosedBadge: "مقفولة أمام الرسائل الجديدة",
+    roomClosedNotice: "الغرفة دي مقفولة أمام الرسائل الجديدة. تقدر تقرأ كل اللي فيها.",
+
+    // الوسائط
+    addImage: "أضف صورة",
+    addVideo: "أضف فيديو",
+    voiceStart: "سجّل رسالة صوتية",
+    voiceStop: "إيقاف التسجيل",
+    voicePermissionDenied:
+      "السماح بالميكروفون متقفل. افتحه للتطبيق من إعدادات جهازك وجرّب تاني.",
+    voiceNoMicrophone: "مفيش ميكروفون على الجهاز ده.",
+    voiceUnsupported: "الجهاز ده مش قادر يسجّل صوت بصيغة مدعومة.",
+    voiceUnavailable: "التسجيل مش متاح في المتصفح ده.",
+    voiceFailed: "التسجيل فشل. جرّب مرة تانية.",
+    voiceEmpty: "مفيش اتسجل. جرّب مرة تانية.",
+    voiceOffNotice: "الرسائل الصوتية مقفولة في الغرفة دي.",
+    checkingFile: "بنراجع الملف قبل النشر…",
+    stagedReady: "جاهز للنشر:",
+    filesChosen: "{n} ملف",
+    removeAttachment: "شيل الملف ده",
+    uploadFailed: "الملف ده مقدرش يننشر. جرّب مرة تانية.",
+    wrongFileType: "الملف ده مش ينفع يتبعت كـ {kind}.",
+    fileTooLarge: "الملف ده كبير أوي. الحد {max}.",
+    attachmentPlay: "شغّل الرسالة الصوتية",
+    attachmentPause: "وقف الرسالة الصوتية",
+    attachmentTranscript: "ما اتقال",
+    attachmentImage: "صورة",
+    attachmentVideo: "فيديو",
+    attachmentVoice: "رسالة صوتية",
+    attachmentImageAlt: "صورة اتنشرت في الغرفة دي",
+    attachmentVideoUnsupported: "الجهاز ده مش قادر يشغّل الفيديو ده.",
+    attachmentUnavailable: "الملف ده مش قادر يتحمّل.",
+    attachmentFlagged: "مشرف بيراجع الملف ده.",
+    attachmentSummary: "ملف",
   },
 
   jobs: {
@@ -1239,6 +1336,24 @@ const ar: Dictionary = {
     couldNotClose: "لم يتم إغلاق هذا العمل",
     yourPosting: "إعلانك",
     applicant: "مقدم الطلب",
+  },
+
+  roomControls: {
+    title: "التحكم في الغرف",
+    intro:
+      "إقفال الغرفة بيمنع أي رسالة جديدة فيها، المشرفين كمان. القراءة مش بتتأثر خالص.",
+    chatLocked: "مفتوحة للنشر",
+    voiceEnabled: "الرسائل الصوتية",
+    mediaEnabled: "الصور والفيديو",
+    closed: "مقفولة",
+    open: "مفتوحة",
+    lockRoom: "اقفل الغرفة",
+    unlockRoom: "افتح الغرفة",
+    confirmLockRoom:
+      "تقفل الغرفة دي؟ محدش هيقدر ينشر فيها لحد ما تفتحها تاني. التاريخ يفضل مقروء.",
+    staffOnlyBadge: "غرفة فريق",
+    noRooms: "مفيش غرف لسه.",
+    saved: "اتحفظ",
   },
 
   admin: {

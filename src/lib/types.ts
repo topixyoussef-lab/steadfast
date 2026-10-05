@@ -48,6 +48,35 @@ export type Room = {
   title: string;
   description: string | null;
   is_private: boolean;
+  /** No new messages from anyone, staff included. Reading is unaffected. */
+  chat_locked: boolean;
+  /** Room accepts voice notes. Ignored once chat_locked is true. */
+  voice_enabled: boolean;
+  /** Room accepts image and video. Ignored once chat_locked is true. */
+  media_enabled: boolean;
+  created_at: string;
+};
+
+export type AttachmentKind = "image" | "audio" | "video";
+
+/**
+ * A file on a message.
+ *
+ * `storage_path` is deliberately absent. The bucket is private, so the path is
+ * not a capability: rendering goes through /api/media/[id], which checks the
+ * caller's read access to the parent message and hands back a signed URL.
+ */
+export type ChatAttachment = {
+  id: string;
+  message_id: string | null;
+  user_id: string;
+  kind: AttachmentKind;
+  mime_type: string;
+  byte_size: number;
+  /** Gemini's transcript for audio, its description for image and video. */
+  description: string | null;
+  duration_seconds: number | null;
+  moderation_status: "allowed" | "flagged" | "blocked" | "failed";
   created_at: string;
 };
 
@@ -62,6 +91,7 @@ export type ChatMessage = {
   created_at: string;
   edited_at: string | null;
   deleted_at: string | null;
+  attachments?: ChatAttachment[];
 };
 
 export type MessageReaction = {
