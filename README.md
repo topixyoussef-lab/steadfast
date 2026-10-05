@@ -210,25 +210,24 @@ contains the keystore password in plaintext.
 ## Deploying
 
 The Vercel project is **not** connected to GitHub, so pushing to `main` deploys
-nothing. Production is a manual, monitored step:
+nothing. Releasing is one script, which deploys and then moves the live hostname
+onto the deployment it just made:
 
-```bash
-vercel --prod
+```powershell
+powershell -File scripts\deploy.ps1
 ```
 
 `steadfast-lake-eta.vercel.app` is the only hostname the TWA, `assetlinks.json`
-and the web manifest point at, and Vercel does not move it on its own: a new
-production deployment otherwise claims only `steadfast-velo6.vercel.app` and
-leaves the real domain frozen on whatever build was live before — so the APK
-download and every other asset silently stay one build behind. `vercel.json`
-claims that alias on every production deploy for exactly that reason. Check it
-afterwards rather than trusting the deploy output:
-
-```bash
-curl -sI https://steadfast-lake-eta.vercel.app/steadfast.apk | findstr /I content-length
-```
-
-The number has to match the APK you just committed.
+and the web manifest point at, and Vercel will not move it by itself: a fresh
+production deployment claims only `steadfast-velo6.vercel.app` and leaves the
+real domain frozen on the previous build, so the APK download and every other
+asset silently stay a release behind. Declaring the alias in `vercel.json` does
+not help — the CLI ignores that key and claims nothing, without saying so. That
+is how a fixed APK sat on `main` for hours while the domain kept serving the
+build before it, so `deploy.ps1` assigns the alias explicitly and then reads the
+APK back off the domain to confirm the length matches what was committed. A
+mismatch exits non-zero: a stale alias still answers `200`, so the status code
+on its own proves nothing.
 
 ## Security notes
 
