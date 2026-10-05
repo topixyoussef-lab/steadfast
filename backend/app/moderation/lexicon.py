@@ -59,6 +59,10 @@ EXPLICIT_TERMS: list[Term] = [
     Term("fetishporn", "explicit", "block"),
     Term("nudes", "explicit", "block"),
     Term("sendnudes", "explicit", "block"),
+    # TS parity: trading/asking for images, intent plus noun.
+    Term("wantnudes", "explicit", "block"),
+    Term("tradenudes", "explicit", "block"),
+    Term("sellnudes", "explicit", "block"),
 ]
 
 # Phrases that describe or invite sexual acts specifically.
@@ -90,6 +94,11 @@ SOLICITATION_TERMS: list[Term] = [
     Term("snapchatme", "solicitation", "block"),
     Term("dmmeononly", "solicitation", "block"),
     Term("privatemessageforvideo", "solicitation", "block"),
+    # TS parity: same intent on platforms the list did not name.
+    Term("addmeondiscord", "solicitation", "block"),
+    Term("joinmytelegram", "solicitation", "block"),
+    Term("myinsta", "solicitation", "block"),
+    Term("addmeoninsta", "solicitation", "block"),
 ]
 
 # Asking where to get explicit material is the message that actually funnels
@@ -169,6 +178,15 @@ GAMBLING_TERMS: list[Term] = [
     Term("depositbonus", "gambling", "block"),
     Term("usemycode", "gambling", "block"),
     Term("telegramcasino", "gambling", "block"),
+    # TS parity: the betting brands and promo vocabulary actually seen in
+    # regional spam.
+    Term("mostbet", "gambling", "block"),
+    Term("betway", "gambling", "block"),
+    Term("22bet", "gambling", "block"),
+    Term("parimatch", "gambling", "block"),
+    Term("melbet", "gambling", "block"),
+    Term("promocode", "gambling", "block"),
+    Term("freebet", "gambling", "block"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -186,6 +204,12 @@ HARM_TERMS: list[Term] = [
     Term("overdose", "self_harm", "block"),
     Term("killyourself", "self_harm", "block"),
     Term("hangmyself", "self_harm", "block"),
+    # TS parity: first-person intent, matching the Arabic tier below. The
+    # bare noun "self harm" stays unblocked — naming a condition is disclosure.
+    Term("cutmyself", "self_harm", "block"),
+    Term("hurtmyself", "self_harm", "block"),
+    Term("betteroffdead", "self_harm", "block"),
+    Term("iwannadie", "self_harm", "block"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -203,6 +227,12 @@ ENGLISH_FLAG_TERMS: list[Term] = [
     Term("investmentopportunity", "scam", "flag"),
     Term("telegram", "offplatform", "flag"),
     Term("whatsappgroup", "offplatform", "flag"),
+    # TS parity: bare group mention and the remittance brands used in the
+    # "send me the transfer" script.
+    Term("telegramgroup", "offplatform", "flag"),
+    Term("giftcard", "scam", "flag"),
+    Term("westernunion", "scam", "flag"),
+    Term("moneygram", "scam", "flag"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -250,6 +280,11 @@ HARASSMENT_TERMS: list[Term] = [
     Term("يا معرص", "harassment", "block"),
     Term("يا منوك", "harassment", "block"),
     Term("يا خول", "harassment", "block"),
+    # TS parity: the same register, same intent.
+    Term("يا عرص", "harassment", "block"),
+    Term("يا لبوة", "harassment", "block"),
+    Term("يا ابن لبوة", "harassment", "block"),
+    Term("يا ابن الوسخة", "harassment", "block"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -278,6 +313,13 @@ ARABIC_HARM_TERMS: list[Term] = [
     Term("طريقة الانتحار", "self_harm", "block"),
     Term("روح موت نفسك", "self_harm", "block"),
     Term("اقتل نفسك", "self_harm", "block"),
+    # TS parity: first-person intent phrased the way it is actually typed.
+    Term("بفكر اقتل نفسي", "self_harm", "block"),
+    Term("هقتل نفسي", "self_harm", "block"),
+    Term("عايز اقتل نفسي", "self_harm", "block"),
+    Term("عايزة اقتل نفسي", "self_harm", "block"),
+    Term("مش عايز اعيش", "self_harm", "block"),
+    Term("مش عايزة اعيش", "self_harm", "block"),
 ]
 
 # Normalising or encouraging the behaviour for other people. Never rescued,
@@ -290,6 +332,12 @@ ARABIC_ENCOURAGEMENT_TERMS: list[Term] = [
     Term("محدش بيبطل", "encouragement", "block"),
     Term("التعافي ملوش لازمة", "encouragement", "block"),
     Term("ارجع اتفرج", "encouragement", "block"),
+    # TS parity: the same minimising script about the habit itself.
+    Term("العادة السرية عادية", "encouragement", "block"),
+    Term("العادة السرية طبيعية", "encouragement", "block"),
+    Term("العادة السرية صحية", "encouragement", "block"),
+    Term("مفيش مشكلة تتفرج", "encouragement", "block"),
+    Term("مرة واحدة مش هتفرق", "encouragement", "block"),
 ]
 
 # Funnelling members off the platform, which is where the abuse actually starts.
@@ -301,6 +349,9 @@ ARABIC_SOLICITATION_TERMS: list[Term] = [
     Term("ابعتلي على الخاص", "solicitation", "block"),
     Term("هبعترك صور", "explicit", "block"),
     Term("ابعتلك فيديو إباحي", "explicit", "block"),
+    # TS parity: the same move-the-conversation-private script.
+    Term("كلمني على الخاص", "solicitation", "block"),
+    Term("ابعتلي في الخاص", "solicitation", "block"),
 ]
 
 # Intent plus noun, following ACQUISITION_TERMS above. The bare word "إباحية"
@@ -313,6 +364,17 @@ ARABIC_ACQUISITION_TERMS: list[Term] = [
     Term("مقاطع إباحية للتحميل", "solicitation", "block"),
     Term("دور على أفلام إباحية", "explicit", "block"),
     Term("ابغى مقاطع إباحية", "explicit", "block"),
+    # TS parity: the same intent using the transliterated "سكس" spelling.
+    Term("عايز فيديو سكس", "explicit", "block"),
+    Term("عايز صور سكس", "explicit", "block"),
+    Term("عايزة فيديوهات سكس", "explicit", "block"),
+    Term("لينك افلام سكس", "explicit", "block"),
+    Term("رابط افلام سكس", "explicit", "block"),
+    Term("مواقع سكس مجانية", "explicit", "block"),
+    Term("عايز مواقع سكس", "explicit", "block"),
+    Term("افلام سكس للتحميل", "solicitation", "block"),
+    Term("مقاطع سكس للتحميل", "solicitation", "block"),
+    Term("عايز صور عريانة", "explicit", "block"),
 ]
 
 ARABIC_GAMBLING_TERMS: list[Term] = [
@@ -321,6 +383,9 @@ ARABIC_GAMBLING_TERMS: list[Term] = [
     Term("قمار أونلاين", "gambling", "block"),
     Term("رهان مضمون", "gambling", "block"),
     Term("ضاعف فلوسك", "gambling", "block"),
+    # TS parity: promo-code spam as it appears in Arabic feeds.
+    Term("برومو كود", "gambling", "block"),
+    Term("موقع قمار", "gambling", "block"),
 ]
 
 # Ordinary insults: logged and surfaced in the console, not walled off.
@@ -335,6 +400,9 @@ ARABIC_INSULT_TERMS: list[Term] = [
     Term("يا وسخ", "harassment", "flag"),
     Term("يا زبالة", "harassment", "flag"),
     Term("انت غبي", "harassment", "flag"),
+    # TS parity: same register, still short of a slur.
+    Term("يا حيوان", "harassment", "flag"),
+    Term("يا بهيم", "harassment", "flag"),
 ]
 
 ARABIC_FLAG_TERMS: list[Term] = [
@@ -352,6 +420,17 @@ ARABIC_FLAG_TERMS: list[Term] = [
     Term("ابعت فلوس", "scam", "flag"),
     Term("تحويل فلوس", "scam", "flag"),
     Term("استثمار مضمون", "scam", "flag"),
+    # TS parity: despair phrasing short of acute intent, and the platform /
+    # payout names used in off-platform and money scripts.
+    Term("زهقت من الحياة", "self_hostility", "flag"),
+    Term("زهقت من حياتي", "self_hostility", "flag"),
+    Term("مش قادر اكمل", "self_hostility", "flag"),
+    Term("انستجرام", "offplatform", "flag"),
+    Term("فيسبوك", "offplatform", "flag"),
+    Term("تيك توك", "offplatform", "flag"),
+    Term("فودافون كاش", "scam", "flag"),
+    Term("انستا باي", "scam", "flag"),
+    Term("ويسترن يونيون", "scam", "flag"),
 ]
 
 # Recovery vocabulary in Arabic. Same role as RECOVERY_SAFE: documentation and

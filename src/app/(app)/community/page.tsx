@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ChatIcon } from "@/components/icons";
 import { createClient } from "@/lib/supabase/server";
 import { requireOnboarded } from "@/lib/dal";
 import { getDictionary } from "@/lib/i18n/server";
@@ -21,8 +22,14 @@ export default async function CommunityPage() {
     .select("id, slug, title, description, is_private")
     .order("title");
 
-  const staffRooms = (rooms ?? []).filter((room) => room.is_private);
-  const memberRooms = (rooms ?? []).filter((room) => !room.is_private);
+  // The main hall is the live group chat, not a room like the others: it gets
+  // its own box at the top of the page instead of a row in the room list.
+  const chatRoom = (rooms ?? []).find((room) => room.slug === "main-hall");
+  const otherRooms = (rooms ?? []).filter((room) => room.slug !== "main-hall");
+  const staffRooms = otherRooms.filter((room) => room.is_private);
+  const memberRooms = otherRooms.filter((room) => !room.is_private);
+  // "User rooms" only needs its own heading when there is also a staff section
+  // to tell it apart from.
   const showSections = staffRooms.length > 0;
 
   return (
@@ -34,7 +41,30 @@ export default async function CommunityPage() {
         <p className="text-sm text-muted">{dict.community.listIntro}</p>
       </header>
 
-      {showSections && (
+      {chatRoom && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold text-faint">{dict.nav.chat}</h2>
+          <Link
+            href={`/community/${chatRoom.slug}`}
+            className="flex items-center gap-3 rounded-2xl border border-accent/50 bg-accent-soft p-4 transition hover:border-accent"
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-contrast">
+              <ChatIcon className="h-5 w-5" />
+            </span>
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-base font-semibold">{chatRoom.title}</span>
+              {chatRoom.description && (
+                <span className="text-sm text-muted">{chatRoom.description}</span>
+              )}
+            </span>
+            <span className="ms-auto shrink-0 text-sm font-medium text-accent">
+              {dict.community.open}
+            </span>
+          </Link>
+        </section>
+      )}
+
+      {staffRooms.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-sm font-semibold text-faint">
             {dict.community.staffRooms}
@@ -43,19 +73,22 @@ export default async function CommunityPage() {
         </section>
       )}
 
-      <section className="flex flex-col gap-3">
-        {showSections && (
-          <h2 className="text-sm font-semibold text-faint">
-            {dict.community.userRooms}
-          </h2>
-        )}
-        <RoomList rooms={memberRooms} dict={dict} />
-        {rooms?.length === 0 && (
-          <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted">
-            {dict.community.noRoomsYet}
-          </p>
-        )}
-      </section>
+      {memberRooms.length > 0 && (
+        <section className="flex flex-col gap-3">
+          {showSections && (
+            <h2 className="text-sm font-semibold text-faint">
+              {dict.community.userRooms}
+            </h2>
+          )}
+          <RoomList rooms={memberRooms} dict={dict} />
+        </section>
+      )}
+
+      {(rooms ?? []).length === 0 && (
+        <p className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted">
+          {dict.community.noRoomsYet}
+        </p>
+      )}
     </main>
   );
 }

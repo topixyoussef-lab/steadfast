@@ -261,6 +261,11 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
     },
   },
 
+  settings: {
+    languageTitle: "Language",
+    languageBody: "Switches the whole app between Arabic and English, immediately.",
+  },
+
   community: {
     title: "Community rooms",
     intro:
@@ -1022,6 +1027,11 @@ const ar: Dictionary = {
       friday: "الجمعة",
       saturday: "السبت",
     },
+  },
+
+  settings: {
+    languageTitle: "اللغة",
+    languageBody: "بتغيّر لغة التطبيق كله بين العربي والإنجليزي في الحال.",
   },
 
   community: {

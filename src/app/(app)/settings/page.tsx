@@ -1,4 +1,5 @@
 import { PasskeySettings } from "@/components/auth/passkey-settings";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { requireProfile } from "@/lib/dal";
 import { getDictionary } from "@/lib/i18n/server";
 import { listCurrentPasskeys } from "@/app/actions/passkey";
@@ -26,6 +27,17 @@ export default async function SettingsPage() {
             {error}
           </p>
         ) : null}
+
+        <section className="flex items-center justify-between gap-4 rounded-2xl border bg-surface p-5">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-base font-semibold">{dict.settings.languageTitle}</h2>
+            <p className="text-sm leading-relaxed text-muted">
+              {dict.settings.languageBody}
+            </p>
+          </div>
+          <LanguageSwitcher />
+        </section>
+
         <PasskeySettings passkeys={passkeys} />
 
         <section className="flex flex-col items-start gap-4 rounded-2xl border bg-surface p-5">
