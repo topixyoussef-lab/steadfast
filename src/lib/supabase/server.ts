@@ -1,9 +1,19 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-export async function createClient() {
+/**
+ * Memoised per request: the data layer calls this four or five times to render
+ * one page (profile, tasks, notifications, staff ids), and each call used to
+ * build a fresh GoTrueClient. Only one instance at a time can single-flight a
+ * token refresh, so a page render fired that many independent refreshes with
+ * the same refresh token — GoTrue rotates it, so all but one came back as a
+ * missing session. Sharing the client lets the library's own dedupe do its job.
+ */
+export const createClient = cache(async () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -32,7 +42,7 @@ export async function createClient() {
       },
     },
   });
-}
+});
 
 export async function createServiceRoleClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -1,4 +1,4 @@
-const CACHE = "steadfast-v2";
+const CACHE = "steadfast-v3";
 
 const PRECACHE = [
   "/",
@@ -32,6 +32,15 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
+  // Left to the browser, deliberately: calling respondWith() on a download
+  // hands the body back to the page instead of to the download manager, so the
+  // APK never lands in the tray and the member sees nothing happen.
+  if (url.pathname.endsWith(".apk")) return;
+
+  // Router prefetch payloads. They carry the serialized page for a route and go
+  // stale the moment a new build ships, so they must never come from cache.
+  if (url.searchParams.has("_rsc")) return;
+
   // Never cache API calls or auth/session traffic — always hit the network.
   if (
     url.pathname.startsWith("/api/") ||
@@ -60,17 +69,22 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Pages and everything else: network-first, fall back to cache when offline.
+  //
+  // Each navigation is stored under its own URL. Storing them all under "/"
+  // meant the last page visited overwrote the offline copy of the home page, so
+  // a flaky load of any protected route could come back as somebody else's HTML
+  // — a signed-in member handed the sign-in page. For the same reason there is
+  // no "/" fallback: a route with no cached copy shows the browser's offline
+  // error rather than silently rendering the wrong page.
   event.respondWith(
     fetch(request)
       .then((response) => {
         if (response.ok && request.mode === "navigate") {
           const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put("/", copy));
+          caches.open(CACHE).then((cache) => cache.put(request.url, copy));
         }
         return response;
       })
-      .catch(() =>
-        caches.match(request).then((hit) => hit ?? caches.match("/")),
-      ),
+      .catch(() => caches.match(request)),
   );
 });

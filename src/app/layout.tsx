@@ -3,6 +3,7 @@ import { Cairo, Geist, Geist_Mono } from "next/font/google";
 
 import { I18nProvider } from "@/components/i18n-provider";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
+import { UpdatePrompt } from "@/components/update-prompt";
 import { htmlLang } from "@/lib/i18n/config";
 import { getDictionary, getDirection, getLocale } from "@/lib/i18n/server";
 
@@ -82,6 +83,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       >
         <I18nProvider dict={dict} locale={locale}>
           <ServiceWorkerRegister />
+          <UpdatePrompt />
           {children}
         </I18nProvider>
       </body>

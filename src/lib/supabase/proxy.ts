@@ -20,11 +20,30 @@ export async function refreshSession(
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        for (const { name, value } of cookiesToSet) {
+        // Deletions are dropped, and that is the whole point of this adapter.
+        //
+        // Opening the app fires a burst of parallel requests (every nav link is
+        // prefetched), and each one lands here with the same access token. When
+        // that token is expired they all call the refresh endpoint with the same
+        // refresh token; GoTrue rotates it, so exactly one wins and the losers
+        // come back as a missing-session error, which GoTrueClient answers with
+        // _removeSession(). Forwarding that removal to the browser deletes the
+        // cookie the winner just wrote, and the member is signed out by a
+        // request they never made. Keeping only real writes means a lost race
+        // costs nothing: the winner's cookie stands.
+        //
+        // Signing out still clears cookies, because it goes through a Server
+        // Action (src/lib/supabase/server.ts), not the proxy.
+        const writes = cookiesToSet.filter(
+          ({ value, options }) => value !== "" && (options.maxAge ?? 1) > 0,
+        );
+        if (writes.length === 0) return;
+
+        for (const { name, value } of writes) {
           request.cookies.set(name, value);
         }
         response = NextResponse.next({ request });
-        for (const { name, value, options } of cookiesToSet) {
+        for (const { name, value, options } of writes) {
           response.cookies.set(name, value, options);
         }
       },

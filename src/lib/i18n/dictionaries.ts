@@ -68,6 +68,15 @@ const en = {
     jobsIntro: "Every listing on the board, newest first.",
   },
 
+  /** Prompt shown when a newer build is deployed than the one still running. */
+  update: {
+    title: "Update available",
+    body: "A new version of Steadfast is ready. Reload to pick it up.",
+    reload: "Reload now",
+    later: "Later",
+    download: "Download the app",
+  },
+
   landing: {
     title: "Steadfast — replace the habit, keep the streak",
     heroLine1: "Replace the habit.",
@@ -158,6 +167,7 @@ passkeyDeleteWarning:
 passkeyNotEnrolled:
         "No fingerprint is saved for that number yet. Sign in with your password once to add one.",
       passkeySignInBody: "Put your finger on the sensor to sign in. No password needed.",
+    usePasswordInstead: "Sign in with your password instead",
   },
 
   errors: {
@@ -839,6 +849,14 @@ const ar: Dictionary = {
     jobsIntro: "كل الإعلانات الموجودة، الأحدث أولاً.",
   },
 
+  update: {
+    title: "في تحديث جديد",
+    body: "نسخة جديدة من ستيدفاست جاهزة. اعمل تحديث عشان تاخدها.",
+    reload: "حدّث دلوقتي",
+    later: "بعدين",
+    download: "نزّل التطبيق",
+  },
+
   landing: {
     title: "ستيدفاست — غيّر العادة، حافظ على السلسلة",
     heroLine1: "غيّر العادة.",
@@ -928,6 +946,7 @@ const ar: Dictionary = {
     passkeyNotEnrolled:
       "مفيش بصمة مسجّلة للرقم ده. ادخل بكلمة المرور مرة واحدة عشان تضيف واحدة.",
     passkeySignInBody: "حط صباعك على الحسّاس عشان تدخل. من غير كلمة مرور.",
+    usePasswordInstead: "ادخل بكلمة المرور بدل كده",
   },
 
   errors: {

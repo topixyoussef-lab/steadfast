@@ -38,6 +38,7 @@ export function PasskeySignIn({
   const [state, formAction, pending] = useActionState(beginPasskeySignIn, {});
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [usePassword, setUsePassword] = useState(false);
   const awaited = useRef<string | null>(null);
 
   // A client-side capability, not application state: useSyncExternalStore reads it
@@ -141,13 +142,23 @@ export function PasskeySignIn({
         <FormError message={state.error} />
       ) : null}
 
-      {/* Nothing to enrol a fingerprint with yet, so the password form appears
-          here exactly once. Every later visit is fingerprint-only. */}
-      {state.passkeyMissing ? (
+      {/* A fingerprint that fails or is dismissed must not be a dead end: this
+          device may hold no enrolled credential, and the password form is the
+          only other way in. Nothing to enrol with yet, so it also appears once
+          on the very first visit. */}
+      {state.passkeyMissing || usePassword ? (
         <>
-          <FormError message={state.error} />
+          {state.passkeyMissing ? <FormError message={state.error} /> : null}
           <AuthForm mode="login" next={next} phone={defaultPhone} />
         </>
+      ) : passkeyError ? (
+        <button
+          type="button"
+          onClick={() => setUsePassword(true)}
+          className="self-center text-sm text-primary underline underline-offset-4"
+        >
+          {t.usePasswordInstead}
+        </button>
       ) : null}
     </div>
   );
