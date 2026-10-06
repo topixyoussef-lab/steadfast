@@ -42,6 +42,17 @@ class WatchVpnService : VpnService() {
   private val resolvers = Executors.newFixedThreadPool(4)
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    return try {
+      start0(intent, flags, startId)
+    } catch (_: Exception) {
+      // A security/foreground turndown (e.g. another VPN already owns the
+      // stack): fail quietly instead of crashing the process.
+      stopSelf()
+      START_NOT_STICKY
+    }
+  }
+
+  private fun start0(intent: Intent?, flags: Int, startId: Int): Int {
     ServiceCompat.startForeground(
       this,
       NOTIFICATION_ID,
@@ -67,6 +78,8 @@ class WatchVpnService : VpnService() {
 
     tunFd = fd
     writer = FileOutputStream(fd.fileDescriptor)
+    lastDomain = null
+    active = true
     Reporter.start(this)
 
     reader = Thread({
@@ -117,11 +130,13 @@ class WatchVpnService : VpnService() {
     val dns = Dns.tryParse(dnsPayload, payloadLen, srcIp, srcPort) ?: return
 
     if (Blocker.isBlocked(dns.domain)) {
+      lastDomain = dns.domain
       Reporter.event(dns.domain, isBlocked = true)
       return // no answer: the domain simply never resolves
     }
 
     Reporter.event(dns.domain, isBlocked = false)
+    lastDomain = dns.domain
     resolvers.execute { answer(dns) }
   }
 
@@ -161,6 +176,7 @@ class WatchVpnService : VpnService() {
     } catch (_: IOException) {
     }
     tunFd = null
+    active = false
     Reporter.stop()
     stopForeground(STOP_FOREGROUND_REMOVE)
     stopSelf()
@@ -202,6 +218,12 @@ class WatchVpnService : VpnService() {
 
   companion object {
     private const val NOTIFICATION_ID = 1
+
+    /** True from establish() until the tunnel closes. Read by the UI. */
+    @Volatile var active: Boolean = false
+
+    /** Last domain the tunnel parsed, so the UI can prove capture works. */
+    @Volatile var lastDomain: String? = null
 
     fun start(context: android.content.Context) {
       ContextCompat.startForegroundService(context, Intent(context, WatchVpnService::class.java))

@@ -1,7 +1,9 @@
 package com.steadfast.watch
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
 import android.net.Uri
 import android.net.VpnService
 import android.os.Build
@@ -21,6 +23,7 @@ class MainActivity : AppCompatActivity() {
   private lateinit var statusText: TextView
   private lateinit var linkText: TextView
   private lateinit var countsText: TextView
+  private lateinit var detailsText: TextView
 
   private val vpnResult =
     registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -41,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     statusText = findViewById(R.id.statusText)
     linkText = findViewById(R.id.linkText)
     countsText = findViewById(R.id.countsText)
+    detailsText = findViewById(R.id.detailsText)
 
     findViewById<Button>(R.id.btnLink).setOnClickListener { openLinkDialog() }
     findViewById<Button>(R.id.btnStart).setOnClickListener { prepareAndStart() }
@@ -57,20 +61,55 @@ class MainActivity : AppCompatActivity() {
     }
   }
 
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    val url = intent.dataString
+    if (url != null && url.startsWith("${Config.SCHEME}://")) handleScheme(url)
+  }
+
   override fun onResume() {
     super.onResume()
     refresh()
   }
 
   private fun refresh() {
-    linkText.text =
-      getString(if (prefs.contains(Config.KEY_TOKEN)) R.string.linked_yes else R.string.linked_no)
+    val linked = prefs.contains(Config.KEY_TOKEN)
+    linkText.text = getString(if (linked) R.string.linked_yes else R.string.linked_no)
 
     val (blocked, allowed) = Reporter.counters()
     countsText.text = getString(R.string.counts, blocked, allowed)
 
-    val running = VpnService.prepare(this) == null
+    val running = WatchVpnService.active
     statusText.text = getString(if (running) R.string.status_active else R.string.status_off)
+
+    val lastDomain = WatchVpnService.lastDomain ?: getString(R.string.details_none)
+    val post = when (Reporter.lastCode) {
+      "ok" -> getString(R.string.post_ok)
+      "refused" -> getString(R.string.post_refused)
+      "retry" -> getString(R.string.post_retry)
+      else -> getString(R.string.post_pending)
+    }
+
+    var details = getString(R.string.details_last, lastDomain) +
+      "\n" + getString(R.string.details_post, post)
+
+    privateDnsServer()?.let { server ->
+      details += "\n" + getString(R.string.private_dns_warning, server)
+    }
+
+    detailsText.text = details
+  }
+
+  /**
+   * Android Private DNS (DoT) routes DNS straight to a TLS server, ignoring
+   * the DNS server the tunnel pushed. Non-null here means capture cannot see
+   * ordinary browsing until the user switches it to Off / Automatic.
+   */
+  private fun privateDnsServer(): String? {
+    if (Build.VERSION.SDK_INT < 29) return null
+    val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val lp = cm.activeNetwork?.let { cm.getLinkProperties(it) } ?: return null
+    return lp.privateDnsServerName?.takeIf { it.isNotBlank() }
   }
 
   private fun prepareAndStart() {
@@ -84,9 +123,9 @@ class MainActivity : AppCompatActivity() {
   }
 
   /**
-   * Link the account: a WebView at /watch/link drives the login and then
-   * hands the session back through the steadfast-watch:// scheme. The token
-   * lives only in this app's private prefs.
+   * Link the account: a WebView at /watch/link drives the login then hands the
+   * session back through the steadfast-watch:// scheme. The token lives only
+   * in this app's private prefs.
    */
   private fun openLinkDialog() {
     val webView = WebView(this)

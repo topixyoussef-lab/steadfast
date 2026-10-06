@@ -37,6 +37,16 @@
       android:textColor="@color/muted"
       android:text="Blocked: 0 · Allowed: 0" />
 
+    <TextView
+      android:id="@+id/detailsText"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="12dp"
+      android:textSize="13sp"
+      android:textColor="@color/ink"
+      android:lineSpacingExtra="2dp"
+      android:text="Last domain captured: —\nLast send to server: nothing sent yet" />
+
     <Button
       android:id="@+id/btnLink"
       android:layout_width="match_parent"

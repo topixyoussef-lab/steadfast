@@ -20,10 +20,15 @@ object Reporter {
   private val allowed = AtomicInteger(0)
   private val blocked = AtomicInteger(0)
 
+  /** Last POST outcome for the UI: "ok", "refused", "retry", or null. */
+  @Volatile var lastCode: String? = null
+    private set
+
   private var prefs: SharedPreferences? = null
 
   fun start(context: Context) {
     prefs = context.applicationContext.getSharedPreferences(Config.PREFS, Context.MODE_PRIVATE)
+    lastCode = null
     if (!running.compareAndSet(false, true)) return
     Thread({ loop() }, "watch-reporter").apply {
       isDaemon = true
@@ -68,12 +73,17 @@ object Reporter {
 
     val body = "{\"events\":[" + batch.joinToString(",") + "]}"
     when (post(token, body)) {
-      POST_OK -> Unit
+      POST_OK -> lastCode = "ok"
       POST_STOP -> {
-        // Consent revoked or session gone: drop the batch and stop reporting.
+        // Consent revoked or session gone: drop the batch, stop reporting,
+        // and tell the UI so a silent gap is not mistaken for capture failure.
+        lastCode = "refused"
         prefs?.edit()?.remove(Config.KEY_TOKEN)?.apply()
       }
-      POST_RETRY -> queue.addAll(batch) // transient network error: keep the batch
+      POST_RETRY -> {
+        lastCode = "retry"
+        queue.addAll(batch) // transient network error: keep the batch
+      }
     }
   }
 

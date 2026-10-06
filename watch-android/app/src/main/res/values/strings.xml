@@ -12,4 +12,12 @@
   <string name="btn_stop">Turn off</string>
   <string name="btn_link">Link my account</string>
   <string name="counts">Blocked: %1$d  ·  Allowed: %2$d</string>
+  <string name="details_last">Last domain captured: %1$s</string>
+  <string name="details_post">Last send to server: %1$s</string>
+  <string name="details_none">—</string>
+  <string name="post_ok">received (200)</string>
+  <string name="post_refused">refused (403) — turn on consent in the web app, or relink</string>
+  <string name="post_retry">network error, will retry</string>
+  <string name="post_pending">nothing sent yet</string>
+  <string name="private_dns_warning">Warning: Android Private DNS (DoT) is on (%1$s), so DNS bypasses this app. Set it to Off/Automatic in network settings, or capture sees nothing.</string>
 </resources>
