@@ -3,12 +3,14 @@
  * page and the client's re-reads: a mismatch here means the poll silently stops
  * carrying reply, edit, and flag state.
  *
- * The nested `attachments(...)` is what makes a posted photo appear without a
- * second query. It has to be spelled out rather than `*`, because the RLS on
- * chat_message_attachments hides staged rows from other members and PostgREST's
- * embedded selects do not apply the parent table's policy to anything but the
- * join key -- so this list is the same one /api/media/[id] returns, minus
- * storage_path.
+ * The nested embed is a PostgREST foreign-key join to the real attachment
+ * table, aliased back to `attachments` -- otherwise the row would carry the
+ * child under `chat_message_attachments` and the rest of the app, which reads
+ * `message.attachments`, would find nothing there. It has to be spelled out
+ * rather than `*`, because the RLS on chat_message_attachments hides staged
+ * rows from other members and PostgREST's embedded selects do not apply the
+ * parent table's policy to anything but the join key -- so this list is the
+ * same one /api/media/[id] returns, minus storage_path.
  *
  * Built with a template literal, not `.join()` or concatenation. The project
  * runs an untyped Supabase client, so supabase-js infers the result row from the
@@ -33,7 +35,7 @@ export const ATTACHMENT_COLUMNS =
 export const MESSAGE_COLUMNS_BASE =
   "id, room_id, user_id, content, is_flagged_by_ai, moderation_status, reply_to, created_at, edited_at, deleted_at";
 
-export const MESSAGE_COLUMNS = `${MESSAGE_COLUMNS_BASE}, attachments (${ATTACHMENT_COLUMNS})`;
+export const MESSAGE_COLUMNS = `${MESSAGE_COLUMNS_BASE}, attachments:chat_message_attachments(${ATTACHMENT_COLUMNS})`;
 
 export const ROOM_COLUMNS_BASE = "id, slug, title, description, is_private";
 
