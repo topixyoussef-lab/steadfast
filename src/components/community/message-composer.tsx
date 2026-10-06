@@ -78,6 +78,30 @@ export function MessageComposer({
   const [menuOpen, setMenuOpen] = useState(false);
   const [voiceSession, setVoiceSession] = useState(false);
 
+  // The ⋮ menu is fixed to the viewport at the button's own position instead of
+  // being an absolute child. The composer is sticky inside a scroll container,
+  // and an anchored dropdown there can end up clipped or parked somewhere the
+  // member cannot see it. Reading the button's rect at open time and pinning the
+  // menu to those coordinates keeps it on screen in both directions, keyboard or
+  // no.
+  const attachRef = useRef<HTMLButtonElement>(null);
+  const [menuAnchor, setMenuAnchor] = useState<{
+    left?: number;
+    right?: number;
+    bottom: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = () => setMenuOpen(false);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [menuOpen]);
+
   // Entering edit mode loads the message into the composer; leaving it drops
   // whatever was typed. Cancel and save both route through here, so the
   // draft can never leak back into a fresh message. The state reset happens
@@ -406,7 +430,27 @@ export function MessageComposer({
 
               <button
                 type="button"
-                onClick={() => setMenuOpen((open) => !open)}
+                ref={attachRef}
+                onClick={() => {
+                  if (menuOpen) {
+                    setMenuOpen(false);
+                    return;
+                  }
+                  const rect = attachRef.current?.getBoundingClientRect();
+                  if (!rect) return;
+                  setMenuAnchor(
+                    document.documentElement.dir === "rtl"
+                      ? {
+                          right: window.innerWidth - rect.right,
+                          bottom: window.innerHeight - rect.top + 8,
+                        }
+                      : {
+                          left: rect.left,
+                          bottom: window.innerHeight - rect.top + 8,
+                        },
+                  );
+                  setMenuOpen(true);
+                }}
                 disabled={uploading || pending}
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
@@ -422,18 +466,19 @@ export function MessageComposer({
                 <MoreGlyph />
               </button>
 
-              {menuOpen && (
+              {menuOpen && menuAnchor && (
                 <>
                   <button
                     type="button"
-                    className="fixed inset-0 z-10 cursor-default"
+                    className="fixed inset-0 z-40 cursor-default"
                     aria-hidden
                     tabIndex={-1}
                     onClick={() => setMenuOpen(false)}
                   />
                   <div
                     role="menu"
-                    className="absolute right-0 bottom-full z-20 mb-2 w-52 overflow-hidden rounded-2xl border border-line bg-surface p-1 shadow-lg shadow-ink/10"
+                    style={menuAnchor}
+                    className="fixed z-50 w-52 overflow-hidden rounded-2xl border border-line bg-surface p-1 shadow-lg shadow-ink/10"
                   >
                     {permissions.voiceEnabled && (
                       <button
