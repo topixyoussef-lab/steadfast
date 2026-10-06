@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  TouchEvent as ReactTouchEvent,
+} from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { MessageComposer } from "@/components/community/message-composer";
@@ -108,6 +112,19 @@ export function MessageThread({
   const [editing, setEditing] = useState<{ id: string; content: string } | null>(null);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  // The WhatsApp-style action menu summoned by a long press or a right click on
+  // a bubble. Fixed to the viewport at the summoning point so no ancestor
+  // overflow can hide it; see the composer's ⋮ menu for the same reasoning.
+  const [actionMenu, setActionMenu] = useState<{
+    messageId: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  // The synthetic click a long press leaves behind lands on whatever now sits
+  // under the finger -- usually the menu's own backdrop -- and would close the
+  // menu the instant it opens. This cancels that one click.
+  const suppressMenuCloseUntilRef = useRef(0);
   const endRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const lastSeenRef = useRef<string>(
@@ -139,6 +156,7 @@ export function MessageThread({
     setEditing((prev) => (prev?.id === id ? null : prev));
     setReplyTo((prev) => (prev?.id === id ? null : prev));
     setPickerFor((prev) => (prev === id ? null : prev));
+    setActionMenu((prev) => (prev?.messageId === id ? null : prev));
   }, []);
 
   /**
@@ -449,6 +467,36 @@ export function MessageThread({
     endRef.current?.scrollIntoView({ block: "end" });
   }, [lastId]);
 
+  // A menu pinned to a viewport point is stale the moment the thread moves
+  // under it, so it closes on scroll or resize instead of floating over the
+  // wrong bubble.
+  useEffect(() => {
+    if (!actionMenu) return;
+    const close = () => {
+      if (longPressTimerRef.current !== null) {
+        window.clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+      setActionMenu(null);
+    };
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [actionMenu]);
+
+  // Never leave a long-press pending across an unmount.
+  useEffect(
+    () => () => {
+      if (longPressTimerRef.current !== null) {
+        window.clearTimeout(longPressTimerRef.current);
+      }
+    },
+    [],
+  );
+
   // Lets the composer hand its optimistic row straight to the thread: a new
   // message, or the result of an edit.
   useEffect(() => {
@@ -481,6 +529,12 @@ export function MessageThread({
     () => new Map(messages.map((m) => [m.id, m])),
     [messages],
   );
+
+  // The bubble the action menu currently points at. Missing when the message
+  // was deleted or scrolled away while the menu was open.
+  const menuMessage = actionMenu
+    ? byId.get(actionMenu.messageId)
+    : undefined;
 
   // The poll reads this ref instead of depending on `messages`, which would
   // restart the timer on every arrival.
@@ -538,6 +592,69 @@ export function MessageThread({
     setReplyTo(null);
     setPickerFor(null);
     setEditing({ id: message.id, content: message.content });
+  }
+
+  function clearLongPress() {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  /**
+   * Open the message action menu at a viewport point, clamped so the whole
+   * panel stays on screen whichever corner summoned it. Called from the
+   * right-click handler and from the long-press timer.
+   */
+  function openMessageActions(message: ChatMessage, x: number, y: number) {
+    clearLongPress();
+    const MENU_W = 176; // w-44
+    const MENU_H = 192; // four w-11 items plus padding
+    setEditing(null);
+    setPickerFor(null);
+    setActionMenu({
+      messageId: message.id,
+      x: Math.round(Math.min(Math.max(x, 8), window.innerWidth - MENU_W - 8)),
+      y: Math.round(Math.min(Math.max(y, 8), window.innerHeight - MENU_H - 8)),
+    });
+  }
+
+  function handleBubbleContextMenu(
+    message: ChatMessage,
+    event: ReactMouseEvent,
+  ) {
+    // Right click on desktop and the long-press context menu on Android both
+    // arrive here; the native menu would cover the one we are about to show.
+    event.preventDefault();
+    openMessageActions(message, event.clientX, event.clientY);
+  }
+
+  function startBubbleLongPress(
+    message: ChatMessage,
+    event: ReactTouchEvent,
+  ) {
+    clearLongPress();
+    // Some WebViews fire their own context menu after a long press and some do
+    // not, so the gesture is handled twice: once by this timer and once by the
+    // context menu handler. Both end in the same openMessageActions, so either
+    // path alone is enough.
+    //
+    // The release that ends a long press synthesizes a `click` ~600ms later,
+    // on whatever element now sits under the finger -- usually the backdrop of
+    // the menu that just opened here. Meaning the menu would close the instant
+    // it appears. The backdrop swallows any click until this touch's stamp has
+    // aged out; both stamps come from the same DOM clock, so the comparison is
+    // honest.
+    suppressMenuCloseUntilRef.current = event.timeStamp + 900;
+    const touch = event.touches[0];
+    longPressTimerRef.current = window.setTimeout(() => {
+      openMessageActions(message, touch?.clientX ?? 0, touch?.clientY ?? 0);
+    }, 420);
+  }
+
+  function closeMessageActions() {
+    clearLongPress();
+    setActionMenu(null);
   }
 
   async function deleteMessage(message: ChatMessage) {
@@ -752,8 +869,15 @@ export function MessageThread({
                   )}
 
                   <div
+                    onContextMenu={(e) =>
+                      handleBubbleContextMenu(message, e)
+                    }
+                    onTouchStart={(e) => startBubbleLongPress(message, e)}
+                    onTouchEnd={clearLongPress}
+                    onTouchMove={clearLongPress}
+                    onTouchCancel={clearLongPress}
                     className={cn(
-                      "w-fit max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+                      "w-fit max-w-[85%] select-none rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
                       mine
                         ? "self-end rounded-se-sm bg-accent-soft text-ink"
                         : cn(
@@ -831,51 +955,11 @@ export function MessageThread({
                     </div>
                   )}
 
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => startReply(message)}
-                      className="rounded-full bg-sunken px-3 py-1 text-xs font-medium text-muted transition hover:text-ink"
-                    >
-                      {dict.community.reply}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setPickerFor(pickerFor === message.id ? null : message.id)
-                      }
-                      className="rounded-full bg-sunken px-3 py-1 text-xs font-medium text-muted transition hover:text-ink"
-                    >
-                      {dict.community.react}
-                    </button>
-
-                    {mine && (
-                      <button
-                        type="button"
-                        onClick={() => startEdit(message)}
-                        className="rounded-full bg-sunken px-3 py-1 text-xs font-medium text-muted transition hover:text-ink"
-                      >
-                        {dict.community.edit}
-                      </button>
-                    )}
-
-                    {(mine || amStaff) && (
-                      <button
-                        type="button"
-                        onClick={() => void deleteMessage(message)}
-                        className="rounded-full bg-sunken px-3 py-1 text-xs font-medium text-muted transition hover:text-danger"
-                      >
-                        {dict.common.delete}
-                      </button>
-                    )}
-
-                    {message.is_flagged_by_ai && (
-                      <span className="text-[11px] text-warning">
-                        {dict.community.flaggedForReview}
-                      </span>
-                    )}
-                  </div>
+                  {message.is_flagged_by_ai && (
+                    <span className="text-[11px] text-warning">
+                      {dict.community.flaggedForReview}
+                    </span>
+                  )}
                 </li>
               );
             })}
@@ -884,6 +968,83 @@ export function MessageThread({
 
         <div ref={endRef} />
       </div>
+
+      {actionMenu && menuMessage && (
+        <>
+          <button
+            type="button"
+            aria-hidden
+            tabIndex={-1}
+            onClick={() => {
+              if (performance.now() < suppressMenuCloseUntilRef.current) {
+                suppressMenuCloseUntilRef.current = 0;
+                return;
+              }
+              setActionMenu(null);
+            }}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+          <div
+            role="menu"
+            style={{ left: actionMenu.x, top: actionMenu.y }}
+            className="fixed z-50 w-44 overflow-hidden rounded-2xl border border-line bg-surface p-1 shadow-lg shadow-ink/10"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeMessageActions();
+                startReply(menuMessage);
+              }}
+              className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm text-ink transition hover:bg-sunken"
+            >
+              {dict.community.reply}
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                closeMessageActions();
+                setPickerFor(
+                  pickerFor === menuMessage.id ? null : menuMessage.id,
+                );
+              }}
+              className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm text-ink transition hover:bg-sunken"
+            >
+              {dict.community.react}
+            </button>
+
+            {menuMessage.user_id === currentUserId && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeMessageActions();
+                  startEdit(menuMessage);
+                }}
+                className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm text-ink transition hover:bg-sunken"
+              >
+                {dict.community.edit}
+              </button>
+            )}
+
+            {(menuMessage.user_id === currentUserId || amStaff) && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeMessageActions();
+                  void deleteMessage(menuMessage);
+                }}
+                className="flex w-full items-center rounded-xl px-3 py-2.5 text-sm text-danger transition hover:bg-danger-soft"
+              >
+                {dict.common.delete}
+              </button>
+            )}
+          </div>
+        </>
+      )}
 
       <MessageComposer
         roomId={roomId}
