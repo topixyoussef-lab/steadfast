@@ -346,6 +346,8 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
     addImage: "Add a photo",
     addVideo: "Add a video",
     voiceStart: "Record a voice note",
+    moreActions: "More options",
+    takePhoto: "Take a photo",
     voiceStop: "Stop recording",
     voicePermissionDenied:
       "Microphone access is blocked. Turn it on for this app in your device settings, then try again.",
@@ -1224,6 +1226,8 @@ const ar: Dictionary = {
     addImage: "أضف صورة",
     addVideo: "أضف فيديو",
     voiceStart: "سجّل رسالة صوتية",
+    moreActions: "خيارات إضافية",
+    takePhoto: "التقط صورة",
     voiceStop: "إيقاف التسجيل",
     voicePermissionDenied:
       "السماح بالميكروفون متقفل. افتحه للتطبيق من إعدادات جهازك وجرّب تاني.",

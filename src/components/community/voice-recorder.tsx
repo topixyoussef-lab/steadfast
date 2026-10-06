@@ -32,10 +32,14 @@ export const MAX_RECORD_SECONDS = 120;
  */
 export function VoiceRecorder({
   disabled,
+  autostart = false,
   onRecorded,
   onError,
 }: {
   disabled?: boolean;
+  /** Begin recording as soon as this instance mounts, used when the member
+   * picked "voice note" out of the composer's ⋮ menu. */
+  autostart?: boolean;
   onRecorded: (clip: RecordedClip) => void;
   onError: (message: string) => void;
 }) {
@@ -90,8 +94,8 @@ export function VoiceRecorder({
     return () => window.removeEventListener("beforeunload", guard);
   }, [recording]);
 
-  function startTicking() {
-    startedRef.current = Date.now();
+  function startTicking(startedAt: number) {
+    startedRef.current = startedAt;
     setElapsed(0);
     stopTimers();
     tickRef.current = setInterval(() => {
@@ -178,7 +182,7 @@ export function VoiceRecorder({
       recorderRef.current = recorder;
       recorder.start(250);
       setRecording(true);
-      startTicking();
+      startTicking(Date.now());
     } catch (error) {
       const name = error instanceof DOMException ? error.name : "";
       if (name === "NotAllowedError" || name === "SecurityError") {
@@ -193,6 +197,23 @@ export function VoiceRecorder({
       setBusy(false);
     }
   }
+
+  // The ⋮ menu hands the recording off through autostart. Fired once on mount,
+  // inside the member's click context, so the microphone prompt is a prompt and
+  // not a surprise permission dialog. start is recreated every render as the
+  // disabled/busy flags move, so the component re-runs the check on each commit;
+  // autostartRef is the one-way latch that keeps only the mount actually firing.
+  const autostartRef = useRef(false);
+  useEffect(() => {
+    if (!autostart || autostartRef.current) return;
+    autostartRef.current = true;
+    const timer = setTimeout(() => void start(), 0);
+    return () => clearTimeout(timer);
+    // start is deliberately the first render's, fresh for a freshly mounted
+    // recorder instance. Re-running on every re-render would re-arm the latch
+    // guard, not the microphone.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autostart]);
 
   function stop() {
     const recorder = recorderRef.current;
@@ -264,7 +285,7 @@ export function VoiceRecorder({
   );
 }
 
-function MicGlyph() {
+export function MicGlyph() {
   return (
     <svg
       viewBox="0 0 24 24"

@@ -5,7 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import {
   StagedAttachmentChip,
 } from "@/components/community/attachment-view";
-import { VoiceRecorder } from "@/components/community/voice-recorder";
+import {
+  MicGlyph,
+  VoiceRecorder,
+} from "@/components/community/voice-recorder";
 import { useI18n } from "@/components/i18n-provider";
 import { cn } from "@/lib/cn";
 import { interpolate } from "@/lib/i18n/interpolate";
@@ -69,8 +72,11 @@ export function MessageComposer({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const [prevEditingId, setPrevEditingId] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [voiceSession, setVoiceSession] = useState(false);
 
   // Entering edit mode loads the message into the composer; leaving it drops
   // whatever was typed. Cancel and save both route through here, so the
@@ -85,6 +91,10 @@ export function MessageComposer({
     // Files belong to the post that was being written, not to an edit of
     // something already sent, so staging is cleared along with the draft.
     setStaged([]);
+    // A half-open attach menu or a live voice session are not something to
+    // carry into an edit either.
+    setMenuOpen(false);
+    setVoiceSession(false);
   }
 
   useEffect(() => {
@@ -333,67 +343,160 @@ export function MessageComposer({
       )}
 
       <div className="flex items-end gap-2">
-        {!editing && permissions.mediaEnabled && (
+        {!editing && voiceSession && permissions.voiceEnabled && (
           <>
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept={IMAGE_ACCEPT}
-              className="sr-only"
-              onChange={(event) =>
-                void pickFile("image", event.currentTarget)
-              }
+            <VoiceRecorder
+              key="voice-session"
+              autostart
+              disabled={uploading || pending}
+              onError={setError}
+              onRecorded={(clip: RecordedClip) => {
+                void upload("audio", clip.blob, clip.durationSeconds).then(
+                  () => setVoiceSession(false),
+                );
+              }}
             />
             <button
               type="button"
-              onClick={() => imageInputRef.current?.click()}
-              disabled={uploading || pending}
-              aria-label={dict.community.addImage}
-              title={dict.community.addImage}
+              onClick={() => setVoiceSession(false)}
+              aria-label={dict.common.cancel}
+              title={dict.common.cancel}
               className={cn(
                 "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-line text-muted transition",
                 "hover:border-accent hover:text-accent",
-                "disabled:cursor-not-allowed disabled:opacity-40",
               )}
             >
-              <ImageGlyph />
-            </button>
-
-            <input
-              ref={videoInputRef}
-              type="file"
-              accept={VIDEO_ACCEPT}
-              className="sr-only"
-              onChange={(event) =>
-                void pickFile("video", event.currentTarget)
-              }
-            />
-            <button
-              type="button"
-              onClick={() => videoInputRef.current?.click()}
-              disabled={uploading || pending}
-              aria-label={dict.community.addVideo}
-              title={dict.community.addVideo}
-              className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-line text-muted transition",
-                "hover:border-accent hover:text-accent",
-                "disabled:cursor-not-allowed disabled:opacity-40",
-              )}
-            >
-              <VideoGlyph />
+              <CloseGlyph />
             </button>
           </>
         )}
 
-        {!editing && permissions.voiceEnabled && (
-          <VoiceRecorder
-            disabled={uploading || pending}
-            onError={setError}
-            onRecorded={(clip: RecordedClip) =>
-              void upload("audio", clip.blob, clip.durationSeconds)
-            }
-          />
-        )}
+        {!editing &&
+          !voiceSession &&
+          (permissions.voiceEnabled || permissions.mediaEnabled) && (
+            <div className="relative shrink-0">
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept={IMAGE_ACCEPT}
+                capture="environment"
+                className="sr-only"
+                onChange={(event) =>
+                  void pickFile("image", event.currentTarget)
+                }
+              />
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept={IMAGE_ACCEPT}
+                className="sr-only"
+                onChange={(event) =>
+                  void pickFile("image", event.currentTarget)
+                }
+              />
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept={VIDEO_ACCEPT}
+                className="sr-only"
+                onChange={(event) =>
+                  void pickFile("video", event.currentTarget)
+                }
+              />
+
+              <button
+                type="button"
+                onClick={() => setMenuOpen((open) => !open)}
+                disabled={uploading || pending}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                aria-label={dict.community.moreActions}
+                title={dict.community.moreActions}
+                className={cn(
+                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-line text-muted transition",
+                  "hover:border-accent hover:text-accent",
+                  "disabled:cursor-not-allowed disabled:opacity-40",
+                  menuOpen && "border-accent text-accent",
+                )}
+              >
+                <MoreGlyph />
+              </button>
+
+              {menuOpen && (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-10 cursor-default"
+                    aria-hidden
+                    tabIndex={-1}
+                    onClick={() => setMenuOpen(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 bottom-full z-20 mb-2 w-52 overflow-hidden rounded-2xl border border-line bg-surface p-1 shadow-lg shadow-ink/10"
+                  >
+                    {permissions.voiceEnabled && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setVoiceSession(true);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-ink transition hover:bg-accent-soft/50"
+                      >
+                        <MicGlyph />
+                        {dict.community.voiceStart}
+                      </button>
+                    )}
+
+                    {permissions.mediaEnabled && (
+                      <>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            imageInputRef.current?.click();
+                          }}
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-ink transition hover:bg-accent-soft/50"
+                        >
+                          <ImageGlyph />
+                          {dict.community.addImage}
+                        </button>
+
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            cameraInputRef.current?.click();
+                          }}
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-ink transition hover:bg-accent-soft/50"
+                        >
+                          <CameraGlyph />
+                          {dict.community.takePhoto}
+                        </button>
+
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            videoInputRef.current?.click();
+                          }}
+                          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-ink transition hover:bg-accent-soft/50"
+                        >
+                          <VideoGlyph />
+                          {dict.community.addVideo}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
         <textarea
           ref={textareaRef}
@@ -494,6 +597,55 @@ function VideoGlyph() {
     >
       <rect x="2.5" y="5.5" width="13" height="13" rx="2.5" />
       <path d="m15.5 10.5 6-3.5v10l-6-3.5z" />
+    </svg>
+  );
+}
+
+function MoreGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className="h-5 w-5"
+      aria-hidden
+    >
+      <circle cx="12" cy="5" r="1.7" />
+      <circle cx="12" cy="12" r="1.7" />
+      <circle cx="12" cy="19" r="1.7" />
+    </svg>
+  );
+}
+
+function CameraGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-5 w-5"
+      aria-hidden
+    >
+      <path d="M4 7.5h2.3l1.4-1.8h8.6l1.4 1.8H20a1.6 1.6 0 0 1 1.6 1.6v8.4A1.6 1.6 0 0 1 20 19H4a1.6 1.6 0 0 1-1.6-1.6V9.1A1.6 1.6 0 0 1 4 7.5Z" />
+      <circle cx="12" cy="13.3" r="3.4" />
+    </svg>
+  );
+}
+
+function CloseGlyph() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      className="h-5 w-5"
+      aria-hidden
+    >
+      <path d="m6 6 12 12M18 6 6 18" />
     </svg>
   );
 }
