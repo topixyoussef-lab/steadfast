@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { resolveBindCode } from "@/lib/watch-bind";
 
 const eventSchema = z.object({
   domain: z.string().trim().min(1).max(255),
@@ -14,38 +15,55 @@ const bodySchema = z.object({
 });
 
 /**
- * Ingestion endpoint for the device companion.
+ * Ingestion endpoint for the Steadfast Watch companions.
  *
- * The caller sends a normal member session token, so the service_role key is
- * never in the app. The token is verified server-side and pinned to a user id
- * BEFORE the RPC runs; watch_ingest then refuses to write anything for a user
- * whose consent is not currently active (0011). A revoked agreement drains
- * the pipeline even if a stale device keeps reporting.
+ * Two callers are accepted:
+ *   * a normal member session token (Bearer) - the Android / Windows guards;
+ *   * a signed parent-issued bind code (X-Watch-Bind) - the browser extension,
+ *     which then needs no member password at all.
+ * In both cases the caller is pinned to a user id BEFORE the RPC runs, and
+ * watch_ingest refuses to write anything for a user whose consent is not
+ * currently active (0011). A revoked agreement drains the pipeline even if a
+ * stale companion keeps reporting.
  */
 export async function POST(request: Request) {
-  const authorization = request.headers.get("authorization");
-  const token = authorization?.startsWith("Bearer ")
-    ? authorization.slice("Bearer ".length)
-    : null;
-
-  if (!token) {
-    return NextResponse.json({ error: "Missing session" }, { status: 401 });
-  }
-
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
   const admin = await createServiceRoleClient();
-  const { data: session, error: authError } = await admin.auth.getUser(token);
-  if (authError || !session?.user?.id) {
-    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+
+  // Preferred: a signed parent-issued bind code (see lib/watch-bind). It still
+  // has to satisfy the member's own active consent inside watch_ingest.
+  const bindHeader = request.headers.get("x-watch-bind");
+  let userId: string | null = null;
+  if (bindHeader) {
+    const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    userId = secret ? resolveBindCode(bindHeader, secret) : null;
+    if (!userId) {
+      return NextResponse.json({ error: "Invalid bind code" }, { status: 401 });
+    }
+  } else {
+    const authorization = request.headers.get("authorization");
+    const token = authorization?.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length)
+      : null;
+
+    if (!token) {
+      return NextResponse.json({ error: "Missing session" }, { status: 401 });
+    }
+
+    const { data: session, error: authError } = await admin.auth.getUser(token);
+    if (authError || !session?.user?.id) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    }
+    userId = session.user.id;
   }
 
   const { data: imported, error } = await admin.rpc("watch_ingest", {
     p_events: parsed.data.events,
-    p_user_id: session.user.id,
+    p_user_id: userId,
   });
 
   if (error) {

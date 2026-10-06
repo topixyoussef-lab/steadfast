@@ -38,6 +38,19 @@
       button.secondary {
         background: #26324a;
       }
+      input {
+        width: 100%;
+        margin-top: 8px;
+        padding: 6px 8px;
+        border: 1px solid #33415c;
+        border-radius: 6px;
+        font-size: 11px;
+        direction: ltr;
+        text-align: left;
+        background: #0b0f18;
+        color: #e8ecf4;
+        box-sizing: border-box;
+      }
       .badge {
         display: inline-block;
         padding: 1px 8px;
@@ -60,7 +73,9 @@
     <p class="muted">مراقب: <span id="counts">0</span></p>
     <p class="muted">آخر موقع: <span id="last">—</span></p>
     <p class="muted">الحالة: <span id="code">—</span></p>
-    <button id="link">ربط الحساب</button>
+    <button id="link">ربط الحساب (جلسة)</button>
+    <input id="bindcode" type="text" placeholder="الصق الكود هنا…" />
+    <button id="bindbtn" class="secondary">ربط بالكود</button>
     <button id="unlink" class="secondary" hidden>إنهاء الربط</button>
     <button id="flush" class="secondary">إرسال الآن</button>
     <script src="popup.js"></script>

@@ -1,6 +1,7 @@
 import { requireStaff } from "@/lib/dal";
 import { createClient } from "@/lib/supabase/server";
 import { getDictionary } from "@/lib/i18n/server";
+import { WatchBind } from "@/components/admin/watch-bind";
 
 export async function generateMetadata() {
   const dict = await getDictionary();
@@ -137,6 +138,8 @@ export default async function AdminWatchPage() {
                   ))}
                 </div>
               )}
+
+              <WatchBind memberId={row.id} memberName={row.name} />
             </section>
           ))}
         </div>

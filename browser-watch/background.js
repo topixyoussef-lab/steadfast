@@ -204,7 +204,42 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 async function flush() {
   if (!state.queue.length) return;
 
-  const o = await storageGet(["token"]);
+  const o = await storageGet(["bind", "token", "refresh"]);
+
+  if (o.bind) {
+    try {
+      const r = await fetch(CONFIG.base + "/api/watch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Watch-Bind": o.bind,
+        },
+        body: JSON.stringify({ events: state.queue }),
+      });
+      if (r.status === 401) {
+        await storageSet({ bind: "" });
+        state.lastCode = "badbind";
+        return;
+      }
+      if (r.status === 403) {
+        state.consent = false;
+        state.lastCode = "consent";
+        return;
+      }
+      if (!r.ok) {
+        state.lastCode = "retry";
+        return;
+      }
+      state.queue = [];
+      state.consent = true;
+      state.lastCode = "ok";
+      return;
+    } catch {
+      state.lastCode = "offline";
+      return;
+    }
+  }
+
   if (!o.token) {
     const ok = await relinkFromCookie();
     if (!ok) {
@@ -265,7 +300,11 @@ function ensureAlarms() {
 }
 
 async function pollLink() {
-  const o = await storageGet(["token"]);
+  const o = await storageGet(["bind", "token"]);
+  if (o.bind) {
+    if (!state.consent && state.queue.length) flush(); // consent may be back
+    return;
+  }
   if (!o.token) {
     await relinkFromCookie();
   } else if (!state.consent && state.queue.length) {
@@ -295,11 +334,12 @@ chrome.alarms.onAlarm.addListener((a) => {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
     if (msg.type === "getStatus") {
-      const o = await storageGet(["token"]);
-      if (!o.token) await relinkFromCookie();
-      const o2 = await storageGet(["token"]);
+      const o = await storageGet(["bind", "token"]);
+      if (!o.bind && !o.token) await relinkFromCookie();
+      const o2 = await storageGet(["bind", "token"]);
       sendResponse({
-        linked: !!o2.token,
+        linked: !!(o2.bind || o2.token),
+        bind: !!o2.bind,
         lastDomain: state.lastDomain || "",
         allowed: state.allowed,
         blocked: state.blocked,
@@ -309,8 +349,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     } else if (msg.type === "link") {
       chrome.tabs.create({ url: CONFIG.base + "/watch/link?browser=1" });
       sendResponse({ ok: true });
+    } else if (msg.type === "bind") {
+      const code = String(msg.code || "").trim();
+      if (!code) {
+        sendResponse({ ok: false });
+        return;
+      }
+      await storageSet({ bind: code });
+      state.consent = true;
+      state.lastCode = "bound";
+      flush();
+      sendResponse({ ok: true });
     } else if (msg.type === "unlink") {
-      await storageSet({ token: "", refresh: "" });
+      await storageSet({ token: "", refresh: "", bind: "" });
       state.queue = [];
       state.lastCode = "unlinked";
       state.consent = true;
