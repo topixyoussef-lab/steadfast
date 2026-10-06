@@ -2,6 +2,7 @@
 import { z } from "zod";
 
 import { createServiceRoleClient, createClient } from "@/lib/supabase/server";
+import { chatMediaReady } from "@/lib/chat-schema";
 import { getProfile } from "@/lib/dal";
 import { moderateMedia } from "@/lib/python-client";
 import { logModeration } from "@/lib/moderation-log";
@@ -37,6 +38,23 @@ import type { AttachmentKind } from "@/lib/types";
  */
 
 export const maxDuration = 60;
+
+/**
+ * The room row this route reads, before and after 0009.
+ *
+ * The select is a ternary of two literal strings and supabase-js cannot infer a
+ * row from a union of them -- it falls back to its ParserError marker, which
+ * makes every field untypeable. The three switches are therefore optional: they
+ * are in the select only once 0009 has landed, and the `!mediaReady` refusal
+ * below runs before anything reads one.
+ */
+type RoomMediaAccess = {
+  id: string;
+  is_private: boolean;
+  chat_locked?: boolean;
+  voice_enabled?: boolean;
+  media_enabled?: boolean;
+};
 
 const querySchema = z.object({
   roomId: z.string().uuid("Unknown room"),
@@ -154,18 +172,38 @@ export async function POST(request: Request) {
   // The room decides whether this member may post at all, and then whether this
   // particular channel is open. Both switches are re-read here rather than
   // trusted from the client, because a hidden button is not a lock.
+  //
+  // The switches are 0009 columns and naming one that is absent is a PostgREST
+  // error rather than a null, which would make this look like an unknown room.
+  // Without 0009 there is also nowhere to stage the file into, so the room check
+  // runs on the columns that have always existed and the upload is then refused
+  // explicitly instead of failing somewhere in the middle.
+  const mediaReady = await chatMediaReady();
   const supabase = await createClient();
   const { data: room } = await supabase
     .from("rooms")
-    .select("id, is_private, chat_locked, voice_enabled, media_enabled")
+    .select(
+      mediaReady
+        ? "id, is_private, chat_locked, voice_enabled, media_enabled"
+        : "id, is_private",
+    )
     .eq("id", roomId)
-    .single();
+    .single<RoomMediaAccess>();
 
   if (!room) {
     return NextResponse.json({ error: "Unknown room" }, { status: 404 });
   }
   if (room.is_private && profile.role === "user") {
     return NextResponse.json({ error: "Unknown room" }, { status: 404 });
+  }
+  if (!mediaReady) {
+    return NextResponse.json(
+      {
+        error:
+          "Media is unavailable until migration 0009 has been applied to the database.",
+      },
+      { status: 503 },
+    );
   }
   if (room.chat_locked) {
     return NextResponse.json(

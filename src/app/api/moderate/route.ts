@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { chatMediaReady } from "@/lib/chat-schema";
 import { getProfile } from "@/lib/dal";
 import { moderateMessage } from "@/lib/python-client";
 import { logModeration } from "@/lib/moderation-log";
@@ -18,6 +19,22 @@ const bodySchema = z.object({
   // per-room quota.
   attachments: z.array(z.string().uuid()).max(4).optional(),
 });
+
+/**
+ * The room row this route reads, before and after 0009.
+ *
+ * The select is a ternary of two literal strings and supabase-js cannot infer a
+ * row from a union of them -- it falls back to its ParserError marker, so
+ * `room.chat_locked` would not typecheck at all. Naming the shape is also what
+ * keeps the optional column honest: `chat_locked` is only in the select once
+ * 0009 has landed, hence optional here, and hence every read of it is guarded by
+ * `mediaReady`.
+ */
+type RoomAccess = {
+  id: string;
+  is_private: boolean;
+  chat_locked?: boolean;
+};
 
 /**
  * The only writer of chat_messages.
@@ -66,12 +83,20 @@ export async function POST(request: Request) {
 
   // Confirm the room exists and is visible to this member before spending a
   // moderation call on it.
+  //
+  // chat_locked is a 0009 column. Asking for it when the column is not there is
+  // a PostgREST error, not a null, so `room` would come back null and every
+  // single text message would be refused as "Unknown room" on a database the
+  // migration has not reached yet. The room check and the lock check therefore
+  // follow the same probe the pages do, and a database without the lock column
+  // reads as an open room -- the way every room read before 0009 existed.
+  const mediaReady = await chatMediaReady();
   const supabase = await createClient();
   const { data: room } = await supabase
     .from("rooms")
-    .select("id, is_private, chat_locked")
+    .select(mediaReady ? "id, is_private, chat_locked" : "id, is_private")
     .eq("id", roomId)
-    .single();
+    .single<RoomAccess>();
 
   if (!room) {
     return NextResponse.json({ error: "Unknown room" }, { status: 404 });
@@ -82,7 +107,7 @@ export async function POST(request: Request) {
   // A closed room is closed to staff as well. Reading it is still allowed; the
   // composer is replaced by a notice rather than disabled, so the room reads as
   // deliberately closed instead of broken.
-  if (room.chat_locked) {
+  if (mediaReady && room.chat_locked) {
     return NextResponse.json(
       { error: "This room is closed to new messages.", locked: true },
       { status: 403 },

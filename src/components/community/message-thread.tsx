@@ -236,7 +236,7 @@ export function MessageThread({
   useEffect(() => {
     const supabase = createClient();
 
-    const channel = supabase
+    let channel = supabase
       .channel(`room:${roomId}`)
       .on(
         "postgres_changes",
@@ -283,32 +283,49 @@ export function MessageThread({
           const old = payload.old as Partial<MessageReaction>;
           if (old) dropReaction(old);
         },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "chat_message_attachments",
-          // UPDATE, not INSERT: the row was inserted by the upload route while
-          // it was still staged and the claim is the UPDATE that attaches it to
-          // a message. Filtering on message_id being non-null is therefore also
-          // the RLS boundary -- a staged file is invisible to everyone but its
-          // uploader, so an unfiltered INSERT would only ever deliver the uploader
-          // their own half-finished upload and nothing useful to anyone else.
-          filter: "message_id=not.is.null",
-        },
-        (payload) => upsertAttachment(payload.new as ChatAttachment),
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "chat_message_attachments" },
-        (payload) => {
-          const old = payload.old as Partial<ChatAttachment>;
-          if (old?.id) dropAttachment(old.id);
-        },
-      )
-      .on("broadcast", { event: "message-deleted" }, ({ payload }) => {
+      );
+
+      // The attachment table is 0009. Asking Realtime for a table the database does
+      // not have leaves the channel unable to report SUBSCRIBED, and this thread
+      // renders "not subscribed" as a permanent "reconnecting" line over an
+      // otherwise working room. So on a database the migration has not reached,
+      // the two listeners that name it are left off altogether: there is nothing
+      // they could deliver until then, and leaving them out is what keeps the rest
+      // of the channel healthy.
+      if (mediaReady) {
+        channel = channel
+          .on(
+            "postgres_changes",
+            {
+              event: "UPDATE",
+              schema: "public",
+              table: "chat_message_attachments",
+              // UPDATE, not INSERT: the row was inserted by the upload route while
+              // it was still staged and the claim is the UPDATE that attaches it to
+              // a message. Filtering on message_id being non-null is therefore also
+              // the RLS boundary -- a staged file is invisible to everyone but its
+              // uploader, so an unfiltered INSERT would only ever deliver the uploader
+              // their own half-finished upload and nothing useful to anyone else.
+              filter: "message_id=not.is.null",
+            },
+            (payload) => upsertAttachment(payload.new as ChatAttachment),
+          )
+          .on(
+            "postgres_changes",
+            {
+              event: "DELETE",
+              schema: "public",
+              table: "chat_message_attachments",
+            },
+            (payload) => {
+              const old = payload.old as Partial<ChatAttachment>;
+              if (old?.id) dropAttachment(old.id);
+            },
+          );
+      }
+
+      channel
+        .on("broadcast", { event: "message-deleted" }, ({ payload }) => {
         const id = (payload as { id?: string } | null)?.id;
         if (id) dropMessage(id);
       })
@@ -324,7 +341,16 @@ export function MessageThread({
       channelRef.current = null;
       void supabase.removeChannel(channel);
     };
-  }, [roomId, upsertMessage, dropMessage, addReaction, dropReaction, upsertAttachment, dropAttachment]);
+  }, [
+    roomId,
+    mediaReady,
+    upsertMessage,
+    dropMessage,
+    addReaction,
+    dropReaction,
+    upsertAttachment,
+    dropAttachment,
+  ]);
 
   // A channel can report SUBSCRIBED and still deliver nothing, which is what a
   // table missing from the supabase_realtime publication looks like. This pulls

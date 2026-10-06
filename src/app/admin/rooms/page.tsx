@@ -5,6 +5,8 @@ import { DoorIcon } from "@/components/icons";
 import { requireStaff } from "@/lib/dal";
 import { getDictionary, getLocale } from "@/lib/i18n/server";
 import type { Room } from "@/lib/types";
+import { ROOM_COLUMNS, ROOM_COLUMNS_BASE } from "@/lib/chat";
+import { chatMediaReady } from "@/lib/chat-schema";
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
 
@@ -38,18 +40,30 @@ export default async function AdminRoomsPage() {
 
   const supabase = await createClient();
 
-  // chat_locked/voice_enabled/media_enabled arrive null on a database that has
-  // not taken 0009 yet. The switches then read as "off", which is the safe
-  // direction: a room nobody has opened the lock on defaults to closed.
+  // The switches are 0009 columns. Naming a column that is not there is a
+  // PostgREST error rather than a null, so the select below would come back with
+  // no rows and this page would report "no rooms" on a database that plainly has
+  // them. The probe is the same one the member-facing pages use, so the whole app
+  // reads one answer about whether 0009 has landed.
+  const mediaReady = await chatMediaReady();
+
+  // A ternary of literal strings is a union, and supabase-js cannot infer a row
+  // type from a union -- it falls back to its ParserError marker. `.returns<>()`
+  // names the shape instead of letting the parser guess.
   const { data: rooms } = await supabase
     .from("rooms")
-    .select(
-      "id, slug, title, description, is_private, chat_locked, voice_enabled, media_enabled, created_at",
-    )
+    .select(`${mediaReady ? ROOM_COLUMNS : ROOM_COLUMNS_BASE}, created_at`)
+    .returns<Room[]>()
     .order("is_private", { ascending: true })
     .order("title", { ascending: true });
 
-  const rows = (rooms ?? []) as Room[];
+  const rows = (rooms ?? []).map((room) => ({
+    ...room,
+    // Absent until 0009 lands, so the switches read as off and stay hidden.
+    chat_locked: room.chat_locked ?? false,
+    voice_enabled: room.voice_enabled ?? false,
+    media_enabled: room.media_enabled ?? false,
+  }));
 
   return (
     <main className="flex w-full flex-col gap-5 px-4 py-6 lg:px-8 lg:py-8">
@@ -87,15 +101,23 @@ export default async function AdminRoomsPage() {
                 </p>
               </div>
 
-              <RoomSwitchActions
-                roomId={room.id}
-                isPrivate={room.is_private}
-                initial={{
-                  chat_locked: room.chat_locked,
-                  voice_enabled: room.voice_enabled,
-                  media_enabled: room.media_enabled,
-                }}
-              />
+              {!mediaReady && (
+                <p className="text-xs text-muted">
+                  {dict.roomControls.switchesUnavailable}
+                </p>
+              )}
+
+              {mediaReady && (
+                <RoomSwitchActions
+                  roomId={room.id}
+                  isPrivate={room.is_private}
+                  initial={{
+                    chat_locked: room.chat_locked,
+                    voice_enabled: room.voice_enabled,
+                    media_enabled: room.media_enabled,
+                  }}
+                />
+              )}
             </li>
           ))}
         </ul>

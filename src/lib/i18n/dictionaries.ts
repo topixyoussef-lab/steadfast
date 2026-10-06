@@ -479,6 +479,8 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
       "Close this room? Nobody can post in it until you reopen it. The history stays readable.",
     staffOnlyBadge: "Staff room",
     noRooms: "No rooms yet.",
+    switchesUnavailable:
+      "Room controls appear once migration 0009 has been applied to the database.",
     saved: "Saved",
   },
 
@@ -1353,6 +1355,8 @@ const ar: Dictionary = {
       "تقفل الغرفة دي؟ محدش هيقدر ينشر فيها لحد ما تفتحها تاني. التاريخ يفضل مقروء.",
     staffOnlyBadge: "غرفة فريق",
     noRooms: "مفيش غرف لسه.",
+    switchesUnavailable:
+      "أدوات التحكم في الغرف بتظهر لما تتطبّق migrations 0009 على الداتابيز.",
     saved: "اتحفظ",
   },
 
