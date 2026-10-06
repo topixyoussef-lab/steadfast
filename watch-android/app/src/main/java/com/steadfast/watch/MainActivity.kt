@@ -1,0 +1,140 @@
+package com.steadfast.watch
+
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.net.VpnService
+import android.os.Build
+import android.os.Bundle
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+
+class MainActivity : AppCompatActivity() {
+
+  private lateinit var statusText: TextView
+  private lateinit var linkText: TextView
+  private lateinit var countsText: TextView
+
+  private val vpnResult =
+    registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+      if (result.resultCode == RESULT_OK) startProtection()
+    }
+
+  private val notificationsPermission =
+    registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+
+  private val prefs by lazy {
+    getSharedPreferences(Config.PREFS, MODE_PRIVATE)
+  }
+
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    setContentView(R.layout.activity_main)
+
+    statusText = findViewById(R.id.statusText)
+    linkText = findViewById(R.id.linkText)
+    countsText = findViewById(R.id.countsText)
+
+    findViewById<Button>(R.id.btnLink).setOnClickListener { openLinkDialog() }
+    findViewById<Button>(R.id.btnStart).setOnClickListener { prepareAndStart() }
+    findViewById<Button>(R.id.btnStop).setOnClickListener {
+      stopService(Intent(this, WatchVpnService::class.java))
+      refresh()
+    }
+
+    if (Build.VERSION.SDK_INT >= 33 &&
+      checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+      PackageManager.PERMISSION_GRANTED
+    ) {
+      notificationsPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
+  }
+
+  override fun onResume() {
+    super.onResume()
+    refresh()
+  }
+
+  private fun refresh() {
+    linkText.text =
+      getString(if (prefs.contains(Config.KEY_TOKEN)) R.string.linked_yes else R.string.linked_no)
+
+    val (blocked, allowed) = Reporter.counters()
+    countsText.text = getString(R.string.counts, blocked, allowed)
+
+    val running = VpnService.prepare(this) == null
+    statusText.text = getString(if (running) R.string.status_active else R.string.status_off)
+  }
+
+  private fun prepareAndStart() {
+    val intent = VpnService.prepare(this)
+    if (intent != null) vpnResult.launch(intent) else startProtection()
+  }
+
+  private fun startProtection() {
+    WatchVpnService.start(this)
+    refresh()
+  }
+
+  /**
+   * Link the account: a WebView at /watch/link drives the login and then
+   * hands the session back through the steadfast-watch:// scheme. The token
+   * lives only in this app's private prefs.
+   */
+  private fun openLinkDialog() {
+    val webView = WebView(this)
+    webView.settings.javaScriptEnabled = true
+    webView.settings.domStorageEnabled = true
+    webView.webChromeClient = WebChromeClient()
+    webView.webViewClient = object : WebViewClient() {
+      override fun shouldOverrideUrlLoading(
+        view: WebView,
+        request: WebResourceRequest,
+      ): Boolean {
+        val url = request.url.toString()
+        if (url.startsWith("${Config.SCHEME}://")) {
+          handleScheme(url)
+          dialogRef?.dismiss()
+          return true
+        }
+        return false
+      }
+    }
+
+    val dialog = AlertDialog.Builder(this)
+      .setView(webView)
+      .setNegativeButton(android.R.string.cancel, null)
+      .show()
+    dialogRef = dialog
+    webView.loadUrl("${Config.BASE_URL}/watch/link")
+  }
+
+  /** Reads token/refresh/exp out of the deep link and remembers it. */
+  private fun handleScheme(url: String) {
+    val uri = Uri.parse(url)
+    val token = uri.getQueryParameter("token") ?: return
+    prefs.edit()
+      .putString(Config.KEY_TOKEN, token)
+      .putString(
+        Config.KEY_REFRESH,
+        uri.getQueryParameter("refresh") ?: "",
+      )
+      .putLong(Config.KEY_EXP, uri.getQueryParameter("exp")?.toLongOrNull() ?: 0L)
+      .apply()
+    refresh()
+  }
+
+  private var dialogRef: AlertDialog? = null
+
+  override fun onDestroy() {
+    super.onDestroy()
+    dialogRef?.dismiss()
+  }
+}

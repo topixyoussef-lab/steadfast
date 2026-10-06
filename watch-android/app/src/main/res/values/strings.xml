@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">Steadfast Watch</string>
+  <string name="vpn_session">Steadfast agreed protection</string>
+  <string name="notification_title">Steadfast protection is on</string>
+  <string name="notification_text">Domains you visit are recorded as agreed.</string>
+  <string name="status_active">Protection is active</string>
+  <string name="status_off">Protection is off</string>
+  <string name="linked_yes">Account linked</string>
+  <string name="linked_no">Account not linked</string>
+  <string name="btn_start">Turn on protection</string>
+  <string name="btn_stop">Turn off</string>
+  <string name="btn_link">Link my account</string>
+  <string name="counts">Blocked: %1$d  ·  Allowed: %2$d</string>
+</resources>

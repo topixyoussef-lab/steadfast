@@ -303,6 +303,9 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
     watchRevokedLabel: "Paused",
     watchSince: "On since {date}",
     watchError: "Something went wrong. Try again.",
+    watchLinkConnecting: "Linking with the companion app…",
+    watchLinkFailed:
+      "Could not reach the companion. Make sure Steadfast Watch is installed.",
   },
 
   /** The DNS-filtering guide the settings card opens. Honest limits: the app
@@ -1273,6 +1276,9 @@ const ar: Dictionary = {
     watchRevokedLabel: "متوقفة",
     watchSince: "شغّالة من {date}",
     watchError: "حصلت مشكلة. جرب تاني.",
+    watchLinkConnecting: "بيتربط بتطبيق الحارس…",
+    watchLinkFailed:
+      "مش قادرين نوصل لتطبيق الحارس. اتأكد إنه متثبّت على الجهاز.",
   },
 
   /** دليل فلترة DNS من كارت الإعدادات. حدود صريحة: التطبيق بيوصل للتعافي
