@@ -53,13 +53,15 @@ object Packets {
     out[19] = srcIp.toByte()
     putShort(out, 10, checksumWrap(checksum(out, 0, 20)))
 
-    // UDP header + payload.
-    putShort(out, 22, 53) // source port (our DNS)
-    putShort(out, 24, srcPort)
-    putShort(out, 26, udpLen)
+    // UDP header + payload. For a response we listen on 53 and answer the
+    // client's original port. Header layout: src 20-21, dst 22-23, len 24-25,
+    // checksum 26-27, payload 28..
+    putShort(out, 20, 53) // source port (our DNS)
+    putShort(out, 22, srcPort)
+    putShort(out, 24, udpLen)
     dnsPayload.copyInto(out, 28)
 
-    // UDP checksum over pseudo-header (src, dst, 0/17/udpLen) + header + data.
+    // UDP checksum over pseudo-header (src, dst, 0/proto/udpLen) + header + data.
     val udpSum =
       checksum(out, 20, udpLen) +
         ((Config.TUN_DNS ushr 16) and 0xFFFF) +
@@ -68,7 +70,7 @@ object Packets {
         (srcIp and 0xFFFF) +
         17 +
         udpLen
-    putShort(out, 26 + 2, checksumWrap(udpSum))
+    putShort(out, 26, checksumWrap(udpSum))
 
     return out
   }

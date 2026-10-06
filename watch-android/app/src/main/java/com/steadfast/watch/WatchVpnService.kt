@@ -111,7 +111,10 @@ class WatchVpnService : VpnService() {
     val payloadLen = minOf(udpLen - 8, limit - 28)
     if (payloadLen <= 0) return
 
-    val dns = Dns.tryParse(packet, 28 + payloadLen, srcIp, srcPort) ?: return
+    // DNS starts 28 bytes in (20 IPv4 + 8 UDP). Parse ONLY the DNS message,
+    // never the outer headers.
+    val dnsPayload = packet.copyOfRange(28, 28 + payloadLen)
+    val dns = Dns.tryParse(dnsPayload, payloadLen, srcIp, srcPort) ?: return
 
     if (Blocker.isBlocked(dns.domain)) {
       Reporter.event(dns.domain, isBlocked = true)
