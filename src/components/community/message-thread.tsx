@@ -5,8 +5,10 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { MessageComposer } from "@/components/community/message-composer";
 import { AttachmentView } from "@/components/community/attachment-view";
+import { LinkPreviewCard } from "@/components/community/link-preview-card";
 import {
   LinkifiedText,
+  firstUrl,
   messagePreview,
 } from "@/components/community/linkified-text";
 import { useI18n } from "@/components/i18n-provider";
@@ -703,6 +705,10 @@ export function MessageThread({
               const groups = reactionGroups.get(message.id) ?? [];
               const attachments = message.attachments ?? [];
               const hasFiles = attachments.length > 0;
+              // One card per message, from the same address the text above it
+              // turned into an anchor. The two go through `firstUrl` together so
+              // a message can never show a card for something it does not link.
+              const previewUrl = firstUrl(message.content ?? "");
 
               return (
                 <li key={message.id} className="flex flex-col gap-1">
@@ -758,6 +764,14 @@ export function MessageThread({
                     )}
                   >
                     {message.content && <LinkifiedText text={message.content} />}
+
+                    {/* A message cannot change URL, but an edit can: keying by
+                        url remounts the card so it cannot show the previous
+                        link's preview while the new one loads. */}
+                    <LinkPreviewCard
+                      key={previewUrl ?? "none"}
+                      url={previewUrl}
+                    />
 
                     {attachments.length > 0 && (
                       <div

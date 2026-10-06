@@ -78,6 +78,21 @@ function split(text: string): Segment[] {
   return segments.length > 0 ? segments : [{ kind: "text", value: text }];
 }
 
+/**
+ * The first address in a message that would become a link here, or null.
+ *
+ * The preview card and the anchor must agree on what counts as a link, so both
+ * go through this: a message with a `javascript:` scheme in it gets no card for
+ * the same reason it gets no <a>.
+ */
+export function firstUrl(text: string): string | null {
+  if (!text) return null;
+  URL_PATTERN.lastIndex = 0;
+  const match = URL_PATTERN.exec(text);
+  if (!match) return null;
+  return safeHref(match[0]);
+}
+
 export function LinkifiedText({
   text,
   className,

@@ -168,3 +168,21 @@ export type PanicAlert = {
   acknowledged_at: string | null;
   created_at: string;
 };
+
+/**
+ * What a link in a chat message turned out to be about.
+ *
+ * Shared because the unfurling happens on the server and the card that prints
+ * these strings is a client component: keeping one definition is what stops the
+ * two sides drifting apart into a card that asks for fields the route no longer
+ * sends.
+ */
+export type LinkPreview = {
+  /** The address after redirects, which is what the card actually opened. */
+  url: string;
+  title: string | null;
+  description: string | null;
+  siteName: string | null;
+  /** Absolute URL of og:image, already resolved against the page. */
+  imageUrl: string | null;
+};
