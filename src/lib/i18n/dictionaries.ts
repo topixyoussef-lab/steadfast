@@ -306,6 +306,11 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
     watchLinkConnecting: "Linking with the companion app…",
     watchLinkFailed:
       "Could not reach the companion. Make sure Steadfast Watch is installed.",
+    watchLinkBrowserDone:
+      "You're connected. The Steadfast Watch extension picked up your session — you can close this tab.",
+    watchLinkBrowserHint:
+      "Keep the extension enabled: it reports only the sites you consented to, and goes silent the moment protection is off.",
+    watchLinkBrowserRetry: "You can also open the extension and press Link again.",
   },
 
   /** The DNS-filtering guide the settings card opens. Honest limits: the app
@@ -1276,9 +1281,13 @@ const ar: Dictionary = {
     watchRevokedLabel: "متوقفة",
     watchSince: "شغّالة من {date}",
     watchError: "حصلت مشكلة. جرب تاني.",
-    watchLinkConnecting: "بيتربط بتطبيق الحارس…",
-    watchLinkFailed:
-      "مش قادرين نوصل لتطبيق الحارس. اتأكد إنه متثبّت على الجهاز.",
+watchLinkConnecting: "بيتربط بتطبيق الحارس…",
+    watchLinkFailed: "الوصل لتطبيق الحارس مش ناجح. تأكد إن Steadfast Watch متثبت.",
+    watchLinkBrowserDone:
+      "اتصلت بنجاح. الإضافة التقطت الجلسة — تقدر تقفل التبويبة دي.",
+    watchLinkBrowserHint:
+      "سيب الإضافة شغالة: هتبعت المواقع اللي وافقت عليها بس، وتسكت فورًا لو الرقابة اتقفلت.",
+    watchLinkBrowserRetry: "تقدر كمان تفتح الإضافة وتدوس «ربط الحساب» تاني.",
   },
 
   /** دليل فلترة DNS من كارت الإعدادات. حدود صريحة: التطبيق بيوصل للتعافي

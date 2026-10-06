@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Steadfast Watch",
+  "version": "1.0.0",
+  "description": "Agreed protection: reports the sites a consented member visits and blocks the protected block list.",
+  "permissions": ["storage", "alarms", "tabs", "webNavigation", "declarativeNetRequest"],
+  "host_permissions": ["*://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Steadfast Watch",
+    "default_popup": "popup.html"
+  }
+}
