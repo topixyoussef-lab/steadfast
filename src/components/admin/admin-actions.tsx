@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 
 import {
   acknowledgeAlertAction,
+  clearAllChatMessagesAction,
+  clearAllModerationLogAction,
   clearAllNotificationsAction,
   clearMessageAction,
   deleteMemberAccountAction,
@@ -510,6 +512,138 @@ export function DeleteAccountActions({
           if (result.ok) {
             setArmed(false);
             router.push("/admin/members");
+            router.refresh();
+          } else setError(result.error ?? dict.admin.noPermission);
+        })
+      }
+    />
+  );
+}
+
+/**
+ * Empty the moderation log. Same two-step typed confirmation as the other
+ * irreversible deletes; the page re-fetches so the counts refresh after.
+ */
+export function WipeLogActions({ count }: { count: number }) {
+  const { dict } = useI18n();
+  const router = useRouter();
+  const [armed, setArmed] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  if (done)
+    return <span className="text-[11px] text-accent">{done}</span>;
+
+  if (!armed) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <Row
+            label={dict.admin.wipeLogTitle}
+            variant="danger"
+            onClick={() => setArmed(true)}
+          />
+          <span className="text-[11px] text-faint">
+            {interpolate(dict.admin.wipeLogCount, { n: count })}
+          </span>
+        </div>
+        <p className="text-[11px] text-faint">{dict.admin.wipeLogBody}</p>
+      </div>
+    );
+  }
+
+  return (
+    <ConfirmPanel
+      warning={interpolate(dict.admin.wipeLogConfirm, { n: count })}
+      confirmLabel={dict.admin.confirmAndDelete}
+      pending={pending}
+      error={error}
+      onCancel={() => {
+        setArmed(false);
+        setError(null);
+      }}
+      onConfirm={() =>
+        startTransition(async () => {
+          setError(null);
+          const result = await clearAllModerationLogAction();
+          if (result.ok) {
+            setArmed(false);
+            setDone(interpolate(dict.admin.wipeLogDone, { n: result.deleted ?? count }));
+            router.refresh();
+          } else setError(result.error ?? dict.admin.noPermission);
+        })
+      }
+    />
+  );
+}
+
+/**
+ * Delete every chat message and every stored file. The heaviest wipe, so the
+ * counts go straight into the typed confirmation.
+ */
+export function WipeChatActions({
+  count,
+  files,
+}: {
+  count: number;
+  files: number;
+}) {
+  const { dict } = useI18n();
+  const router = useRouter();
+  const [armed, setArmed] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  if (done)
+    return (
+      <span className="text-[11px] text-accent">{done}</span>
+    );
+
+  if (!armed) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2">
+          <Row
+            label={dict.admin.wipeChatTitle}
+            variant="danger"
+            onClick={() => setArmed(true)}
+          />
+          <span className="text-[11px] text-faint">
+            {interpolate(dict.admin.wipeChatCount, { n: count })}
+          </span>
+        </div>
+        <p className="text-[11px] text-faint">{dict.admin.wipeChatBody}</p>
+      </div>
+    );
+  }
+
+  return (
+    <ConfirmPanel
+      warning={interpolate(dict.admin.wipeChatConfirm, {
+        n: count,
+        m: files,
+      })}
+      confirmLabel={dict.admin.confirmAndDelete}
+      pending={pending}
+      error={error}
+      onCancel={() => {
+        setArmed(false);
+        setError(null);
+      }}
+      onConfirm={() =>
+        startTransition(async () => {
+          setError(null);
+          const result = await clearAllChatMessagesAction();
+          if (result.ok) {
+            setArmed(false);
+            setDone(
+              interpolate(dict.admin.wipeChatDone, {
+                n: result.messages ?? count,
+                m: result.files ?? files,
+              }),
+            );
             router.refresh();
           } else setError(result.error ?? dict.admin.noPermission);
         })

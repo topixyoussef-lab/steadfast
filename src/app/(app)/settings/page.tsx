@@ -3,6 +3,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { requireProfile } from "@/lib/dal";
 import { getDictionary } from "@/lib/i18n/server";
 import { listCurrentPasskeys } from "@/app/actions/passkey";
+import Link from "next/link";
 
 export async function generateMetadata() {
   const dict = await getDictionary();
@@ -39,6 +40,23 @@ export default async function SettingsPage() {
         </section>
 
         <PasskeySettings passkeys={passkeys} />
+
+        <section className="flex items-center justify-between gap-4 rounded-2xl border bg-surface p-5">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-base font-semibold">
+              {dict.settings.protectionCardTitle}
+            </h2>
+            <p className="text-sm leading-relaxed text-muted">
+              {dict.settings.protectionCardBody}
+            </p>
+          </div>
+          <Link
+            href="/protection"
+            className="shrink-0 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-ink transition hover:border-line-strong"
+          >
+            {dict.protection.title}
+          </Link>
+        </section>
 
         <section className="flex flex-col items-start gap-4 rounded-2xl border bg-surface p-5">
           <div className="flex flex-col gap-1">

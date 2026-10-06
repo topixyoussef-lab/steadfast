@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import {
+  BellIcon,
   BriefcaseIcon,
   ChatIcon,
   DoorIcon,
@@ -26,6 +27,7 @@ const ITEMS: ConsoleItem[] = [
   { href: "/admin/moderation", icon: ChatIcon, labelKey: "moderation" },
   { href: "/admin/rooms", icon: DoorIcon, labelKey: "rooms" },
   { href: "/admin/jobs", icon: BriefcaseIcon, labelKey: "jobs" },
+  { href: "/admin/messages", icon: BellIcon, labelKey: "messages" },
 ];
 
 /** Section switcher for the console. Deliberately not the member sidebar. */

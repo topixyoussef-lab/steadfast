@@ -62,12 +62,14 @@ const en = {
     moderation: "Moderation",
     jobs: "Jobs",
     rooms: "Rooms",
+    messages: "Messages",
     backToApp: "Back to app",
     overviewIntro: "Open SOS alerts first. Everything else can wait.",
     membersIntro: "Open a member for their full record.",
     moderationIntro: "Messages the AI flagged, and the moderation log behind them.",
     jobsIntro: "Every listing on the board, newest first.",
     roomsIntro: "Close a room to new messages, or turn off what it accepts.",
+    messagesIntro: "Send an in-app notification to a member, or to everyone.",
   },
 
   /** Prompt shown when a newer build is deployed than the one still running. */
@@ -281,6 +283,36 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
   settings: {
     languageTitle: "Language",
     languageBody: "Switches the whole app between Arabic and English, immediately.",
+    protectionCardTitle: "Browsing protection",
+    protectionCardBody:
+      "DNS-level filtering you control on your device or router — the network becomes the boundary.",
+  },
+
+  /** The DNS-filtering guide the settings card opens. Honest limits: the app
+   * reaches recovery and support, but cannot watch browsing; OS/router level
+   * filtering is the only feasible supervision, and it is fully external. */
+  protection: {
+    title: "Device-level protections",
+    intro:
+      "The app keeps your streak and connects you to your trust circle, but it cannot see or watch your browsing. To make the network itself the boundary, filtering has to live at the OS or router level. Enable one of these and the recovery side keeps working as always.",
+    androidTitle: "Android — Private DNS",
+    androidBody:
+      "Settings ▸ Network & internet ▸ Private DNS ▸ private DNS provider hostname. No app to install; it filters the whole connection.",
+    iosTitle: "iPhone / iPad — DNS profile",
+    iosBody:
+      "Install a DNS profile, then enable it under Settings ▸ General ▸ VPN & Device Management. Blocks content in every browser including Safari.",
+    routerTitle: "Router / home network",
+    routerBody:
+      "Setting DNS on the router covers every device on the Wi-Fi in one go and cannot be switched off by accident.",
+    providersTitle: "Filtering DNS providers",
+    providersBody:
+      "DNS-only blockers with free tiers — no subscription needed at the device or router level:",
+    dnsBrowse: "Browsing + porn / adult (CleanBrowsing): custom.filter.dns.cleanbrowsing.org",
+    dnsFamily: "Family + porn / adult (Cloudflare): family.cloudflare-dns.com",
+    dnsAdguard: "Ads + trackers (AdGuard): dns.adguard.com",
+    love:
+      "With all three in place, the network carries the boundary — not the will alone.",
+    backToSettings: "Back to settings",
   },
 
   community: {
@@ -536,6 +568,39 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
       "The moderation log is kept, with this member detached from it.",
     typeDeleteToConfirm: "Type {word} to confirm",
     confirmAndDelete: "Delete permanently",
+
+    /** Console broadcast outbox. */
+    broadcastTitle: "Send a message",
+    broadcastIntro:
+      "A notification on the bell — for every member, or for one member. Delivered just like a system notification.",
+    recipient: "Recipient",
+    recipientEveryone: "All members",
+    recipientOne: "One member",
+    chooseMember: "Choose a member…",
+    broadcastPlaceholderTitle: "Message title",
+    broadcastPlaceholderBody: "Message text (optional)",
+    broadcastPlaceholderLink: "Link (optional)",
+    sendBroadcast: "Send",
+    sentBroadcast: "Delivered to {n} members.",
+    composeAnother: "Compose another",
+    memberUnnamed: "Unnamed member",
+
+    /** Maintenance wipes: console-only storage recovery. */
+    maintenanceTitle: "Clear storage",
+    maintenanceIntro:
+      "Frees the two largest blocks of space. Typing DELETE is required for both.",
+    wipeLogTitle: "Moderation log only",
+    wipeLogBody: "Deletes the audit trail of every moderation decision.",
+    wipeLogCount: "{n} log rows",
+    wipeLogConfirm:
+      "Clear all {n} moderation log rows? The audit trail of every AI judgement is removed and cannot be restored.",
+    wipeLogDone: "Cleared {n} log rows.",
+    wipeChatTitle: "All chat messages & media",
+    wipeChatBody: "Deletes every message in every room and every uploaded file.",
+    wipeChatCount: "{n} messages",
+    wipeChatConfirm:
+      "Clear every chat message plus {n} stored files? Every room empties and the files leave storage. This cannot be undone.",
+    wipeChatDone: "Cleared {n} messages and {m} files.",
     cancel: "Cancel",
     accountDeleted: "Account deleted.",
     filterSearchPlaceholder: "Search messages or categories",
@@ -948,12 +1013,14 @@ const ar: Dictionary = {
     moderation: "الرقابة",
     jobs: "الأعمال",
     rooms: "الغرف",
+    messages: "الرسائل",
     backToApp: "رجوع للتطبيق",
     overviewIntro: "استغاثات SOS المفتوحة أولاً، وباقي الأمور بعدين.",
     membersIntro: "افتح أي عضو لعرض ملفه الكامل.",
     moderationIntro: "الرسائل اللي الذكاء الاصطناعي علّمها، وسجل الرقابة وراها.",
     jobsIntro: "كل الإعلانات الموجودة، الأحدث أولاً.",
     roomsIntro: "اقفل غرفة من الرسائل الجديدة، أو أوقف اللي هيستقبله.",
+    messagesIntro: "أرسل إشعاراً داخل التطبيق لعضو معيّن، أو للجميع.",
   },
 
   update: {
@@ -1163,6 +1230,35 @@ const ar: Dictionary = {
   settings: {
     languageTitle: "اللغة",
     languageBody: "بتغيّر لغة التطبيق كله بين العربي والإنجليزي في الحال.",
+    protectionCardTitle: "حماية التصفح",
+    protectionCardBody:
+      "فلترة على مستوى DNS بتتحكم فيها من جهازك أو الراوتر — الشبكة تبقى هي الحدود.",
+  },
+
+  /** دليل فلترة DNS من كارت الإعدادات. حدود صريحة: التطبيق بيوصل للتعافي
+   * والدعم لكن مستحيل يراقب التصفح؛ الفلترة على نظام الجهاز أو الراوتر هي
+   * الحماية الوحيدة الممكنة، وهي بالكامل خارج التطبيق. */
+  protection: {
+    title: "حماية على مستوى الجهاز",
+    intro:
+      "التطبيق بيخلّي السلسلة مستمرة ويوصلّك بدارك، لكنه مش قادر يرى تصفحك ولا يراقبه. عشان الشبكة نفسها تبقى هي الحد، الفلترة لازم تعيش على مستوى النظام أو الراوتر. فعّل واحدة من دي وكارت التعافي شغّال زي ما هو.",
+    androidTitle: "أندرويد — DNS خاص",
+    androidBody:
+      "الإعدادات ▸ الشبكة والإنترنت ▸ DNS خاص ▸ اسم مزوّد الـDNS. مفيش تطبيق يتحمّل — بيوفلتر الاتصال كله.",
+    iosTitle: "آيفون / آيباد — ملف DNS",
+    iosBody:
+      "نزّل ملف DNS وفعّله من الإعدادات ▸ عام ▸ VPN وإدارة الأجهزة. بيحظر المحتوى في كل المتصفحات حتى Safari.",
+    routerTitle: "الراوتر / شبكة البيت",
+    routerBody:
+      "بتحدد الـDNS على الراوتر فيغطّي كل الأجهزة اللي على الواي فاي مرة واحدة، ومفيهوش زر بنتسطبته بالغلط.",
+    providersTitle: "مزوّدو فلترة DNS",
+    providersBody:
+      "وكلّهم فلترة بس فيهم تسجيل مجاني — مفيش اشتراك لازم على مستوى الجهاز أو الراوتر:",
+    dnsBrowse: "تصفح + محتوى للكبار (CleanBrowsing): custom.filter.dns.cleanbrowsing.org",
+    dnsFamily: "عائلي + محتوى للكبار (Cloudflare): family.cloudflare-dns.com",
+    dnsAdguard: "إعلانات + تتبع (AdGuard): dns.adguard.com",
+    love: "لو الثلاثة شغّالين، الشبكة تحمل الحد — مش الإرادة لوحدها.",
+    backToSettings: "رجوع للإعدادات",
   },
 
   community: {
@@ -1409,6 +1505,39 @@ const ar: Dictionary = {
     deleteAccountKeepsLog: "سجل الرقابة هيفضل موجود، بس من غير ربط بالعضو.",
     typeDeleteToConfirm: "اكتب {word} للتأكيد",
     confirmAndDelete: "احذف نهائي",
+
+    /** صندوق الإرسال في اللوحة. */
+    broadcastTitle: "إرسال رسالة",
+    broadcastIntro:
+      "إشعار بيوصل على الجرس — لكل الأعضاء أو لعضو واحد. بيوصله زي أي إشعار نظام.",
+    recipient: "المرسَل إليه",
+    recipientEveryone: "كل الأعضاء",
+    recipientOne: "عضو واحد",
+    chooseMember: "اختر عضواً…",
+    broadcastPlaceholderTitle: "عنوان الرسالة",
+    broadcastPlaceholderBody: "نص الرسالة (اختياري)",
+    broadcastPlaceholderLink: "رابط (اختياري)",
+    sendBroadcast: "إرسال",
+    sentBroadcast: "وصلت لـ {n} أعضاء.",
+    composeAnother: "رسالة تانية",
+    memberUnnamed: "عضو بدون اسم",
+
+    /** تنظيف المساحة: خاص بلوحة التحكم. */
+    maintenanceTitle: "تنظيف المساحة",
+    maintenanceIntro:
+      "بيفرّغ أكبر كتلتين من المساحة. الاثنين بيطلبوا كتابة DELETE.",
+    wipeLogTitle: "سجل الرقابة فقط",
+    wipeLogBody: "يمسح ذاكرة كل قرار رقابة.",
+    wipeLogCount: "{n} سطر سجل",
+    wipeLogConfirm:
+      "تمسح كل سجل الرقابة ({n})؟ ذاكرة كل قرار الذكاء الاصطناعي هتتمسح ومش هترجع.",
+    wipeLogDone: "اتمسح {n} سطر.",
+    wipeChatTitle: "كل رسائل الدردشة والمرفقات",
+    wipeChatBody: "يمسح كل رسالة في كل غرفة وكل ملف مرفوع.",
+    wipeChatCount: "{n} رسالة",
+    wipeChatConfirm:
+      "تمسح كل رسائل الدردشة مع {n} ملف مرفوع؟ كل الغرف هتفضى والملفات هتتمسح من التخزين. مستحيل يترجّع.",
+    wipeChatDone: "اتمسح {n} رسالة و{m} ملف.",
     cancel: "إلغاء",
     accountDeleted: "الحساب اتمسح.",
     filterSearchPlaceholder: "ابحث في الرسائل أو التصنيفات",

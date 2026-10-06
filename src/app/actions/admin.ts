@@ -504,3 +504,168 @@ export async function setRoomMediaEnabledAction(input: {
     value: input.enabled,
   });
 }
+
+// ============================================================
+// Broadcast + maintenance
+// ============================================================
+// Console-only outbox: a notification delivered to one member or to everyone,
+// and two irrecoverable storage cleanups. These run on the service role where
+// the member UI cannot reach (storage objects live behind the storage API,
+// which has no member policy at all), made safe by an explicit admin-role
+// check before anything is touched. The moderation log purge runs on the user
+// client so RLS still has a say; everything else here has to bypass RLS, and
+// the role check is the floor, matching setRoomSwitch.
+
+const broadcastSchema = z.object({
+  title: z.string().trim().min(1, "Write a title").max(120),
+  body: z.string().trim().max(2000).optional(),
+  link: z.string().trim().max(500).optional(),
+  userId: z.string().uuid().nullable().optional(),
+});
+
+/**
+ * Send an in-app notification to one member, or to every member when userId
+ * is null. The write goes through admin_broadcast_notifications (0010) because
+ * notifications has no INSERT policy by design; the function re-checks the
+ * role so a future caller cannot forget.
+ */
+export async function sendBroadcastAction(input: {
+  title: string;
+  body?: string;
+  link?: string;
+  userId?: string | null;
+}): Promise<{ ok: boolean; count?: number; error?: string }> {
+  const parsed = broadcastSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid message" };
+  }
+
+  const staff = await requireStaff();
+  if (staff.role !== "admin") {
+    return { ok: false, error: "Only admins can send console messages" };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("admin_broadcast_notifications", {
+    p_title: parsed.data.title,
+    p_body: parsed.data.body || null,
+    p_link: parsed.data.link || null,
+    p_user_id: parsed.data.userId || null,
+  });
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/messages");
+  return { ok: true, count: typeof data === "number" ? data : 0 };
+}
+
+/** A filter the wipe can hunt everything with, without naming a real row. */
+const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Delete every chat message and every stored file, reclaiming real storage.
+ *
+ * Ordering matters: the object removal happens first so the rows are still
+ * reachable to list, then message rows go (their attachment rows cascade),
+ * then the buckets are empty too. A partial object removal refuses the whole
+ * operation rather than leaving orphaned bytes behind.
+ */
+export async function clearAllChatMessagesAction(): Promise<{
+  ok: boolean;
+  messages?: number;
+  files?: number;
+  error?: string;
+}> {
+  const staff = await requireStaff();
+  if (staff.role !== "admin") {
+    return { ok: false, error: "Only admins can clear the chat" };
+  }
+
+  const admin = await createServiceRoleClient();
+
+  // PostgREST caps a plain select at 1000 rows, and a wipe that forgets the
+  // 1001st file leaves orphans in the bucket, so walk the attachment table in
+  // pages and take the storage objects out in the same batch size.
+  const storagePaths: string[] = [];let from = 0;
+  for (;;) {
+    const { data: objects, error: objectError } = await admin
+      .from("chat_message_attachments")
+      .select("storage_path")
+      .order("id")
+      .range(from, from + 999);
+
+    if (objectError) return { ok: false, error: objectError.message };
+
+    storagePaths.push(
+      ...(objects ?? [])
+        .map((row) => (row as { storage_path?: string }).storage_path)
+        .filter((path): path is string => Boolean(path)),
+    );
+
+    if (!objects || objects.length < 1000) break;
+    from += 1000;
+  }
+
+  let filesRemoved = 0;
+  for (let start = 0; start < storagePaths.length; start += 1000) {
+    const { error } = await admin.storage
+      .from("chat-media")
+      .remove(storagePaths.slice(start, start + 1000));
+    if (error) {
+      return {
+        ok: false,
+        error: "Some files could not be deleted; nothing was cleared.",
+      };
+    }
+    filesRemoved += Math.min(1000, storagePaths.length - start);
+  }
+
+  const { count, error } = await admin
+    .from("chat_messages")
+    .delete({ count: "exact" })
+    .neq("id", ZERO_UUID);
+
+  if (error) return { ok: false, error: error.message };
+
+  // Staged upload rows (a file uploaded but the message never posted) have no
+  // message to cascade from, so remove them explicitly. Their objects were
+  // already taken out above.
+  const { error: stagedError } = await admin
+    .from("chat_message_attachments")
+    .delete()
+    .is("message_id", null);
+
+  if (stagedError) return { ok: false, error: stagedError.message };
+
+  revalidatePath("/admin/moderation");
+  revalidatePath("/community", "layout");
+  return { ok: true, messages: count ?? 0, files: filesRemoved };
+}
+
+/**
+ * Empty the moderation log.
+ *
+ * Run on the user client so the RLS policy (0007) is what actually allows it,
+ * and the admin-role check above is the first gate rather than the only one.
+ */
+export async function clearAllModerationLogAction(): Promise<{
+  ok: boolean;
+  deleted?: number;
+  error?: string;
+}> {
+  const staff = await requireStaff();
+  if (staff.role !== "admin") {
+    return { ok: false, error: "Only admins can clear the moderation log" };
+  }
+
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("moderation_log")
+    .delete({ count: "exact" })
+    .gt("id", 0);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/admin/moderation");
+  return { ok: true, deleted: count ?? 0 };
+}
