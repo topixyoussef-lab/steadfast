@@ -1,8 +1,10 @@
 import { PasskeySettings } from "@/components/auth/passkey-settings";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { ConsentCard, type ConsentState } from "@/components/watch/consent-card";
 import { requireProfile } from "@/lib/dal";
 import { getDictionary } from "@/lib/i18n/server";
 import { listCurrentPasskeys } from "@/app/actions/passkey";
+import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 
 export async function generateMetadata() {
@@ -11,10 +13,17 @@ export async function generateMetadata() {
 }
 
 export default async function SettingsPage() {
-  await requireProfile();
+  const profile = await requireProfile();
   const dict = await getDictionary();
 
   const { passkeys, error } = await listCurrentPasskeys();
+
+  const supabase = await createClient();
+  const { data: consent } = await supabase
+    .from("monitoring_consents")
+    .select("status, consented_at")
+    .eq("user_id", profile.id)
+    .maybeSingle();
 
   return (
     <main className="flex w-full flex-col gap-8 px-5 py-8 safe-t safe-b lg:px-8">
@@ -40,6 +49,10 @@ export default async function SettingsPage() {
         </section>
 
         <PasskeySettings passkeys={passkeys} />
+
+        <ConsentCard
+          consent={(consent as ConsentState) ?? { status: null, consented_at: null }}
+        />
 
         <section className="flex items-center justify-between gap-4 rounded-2xl border bg-surface p-5">
           <div className="flex flex-col gap-1">

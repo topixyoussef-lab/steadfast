@@ -70,6 +70,9 @@ const en = {
     jobsIntro: "Every listing on the board, newest first.",
     roomsIntro: "Close a room to new messages, or turn off what it accepts.",
     messagesIntro: "Send an in-app notification to a member, or to everyone.",
+    watch: "Watch",
+    watchIntro:
+      "Members who agreed to protection, and their daily activity reports.",
   },
 
   /** Prompt shown when a newer build is deployed than the one still running. */
@@ -286,6 +289,20 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
     protectionCardTitle: "Browsing protection",
     protectionCardBody:
       "DNS-level filtering you control on your device or router — the network becomes the boundary.",
+    watchTitle: "Agreed protection",
+    watchBody:
+      "Sends only the domains you visit and their times to the Steadfast staff as the protection you agreed to. Nothing else, and never anything in secret.",
+    watchStaff: "Who sees it: the Steadfast staff team. Your own record is visible to you here on your own terms.",
+    watchScopeNote:
+      "Starts working when the companion device app is on. You can turn it off at any moment.",
+    watchOffHint:
+      "You chose to pause protection. You can turn it back on anytime.",
+    watchEnable: "Turn on protection",
+    watchRevoke: "Turn off protection",
+    watchOnLabel: "On",
+    watchRevokedLabel: "Paused",
+    watchSince: "On since {date}",
+    watchError: "Something went wrong. Try again.",
   },
 
   /** The DNS-filtering guide the settings card opens. Honest limits: the app
@@ -601,6 +618,13 @@ phoneRegistered: "That number already has an account. Try signing in instead.",
     wipeChatConfirm:
       "Clear every chat message plus {n} stored files? Every room empties and the files leave storage. This cannot be undone.",
     wipeChatDone: "Cleared {n} messages and {m} files.",
+
+    /** Reports for members who agreed to protection. */
+    watchEmpty: "No active agreements yet.",
+    watchSinceLabel: "On since",
+    watchBlocked: "Blocked",
+    watchAllowed: "Allowed",
+    watchNothing: "No activity recorded yet.",
     cancel: "Cancel",
     accountDeleted: "Account deleted.",
     filterSearchPlaceholder: "Search messages or categories",
@@ -1021,6 +1045,8 @@ const ar: Dictionary = {
     jobsIntro: "كل الإعلانات الموجودة، الأحدث أولاً.",
     roomsIntro: "اقفل غرفة من الرسائل الجديدة، أو أوقف اللي هيستقبله.",
     messagesIntro: "أرسل إشعاراً داخل التطبيق لعضو معيّن، أو للجميع.",
+    watch: "الوقاية",
+    watchIntro: "الأعضاء اللي وافقوا على الحماية وتقارير نشاطهم اليومية.",
   },
 
   update: {
@@ -1233,6 +1259,20 @@ const ar: Dictionary = {
     protectionCardTitle: "حماية التصفح",
     protectionCardBody:
       "فلترة على مستوى DNS بتتحكم فيها من جهازك أو الراوتر — الشبكة تبقى هي الحدود.",
+    watchTitle: "الحماية المتفق عليها",
+    watchBody:
+      "بتبعت أسماء المواقع اللي بتزورها وأوقاتها فقط لفريق ستيدفاست على أساس الحماية اللي اتفقت عليها. مفيش غير كده، ومفيش أي حاجة سرية.",
+    watchStaff:
+      "اللي بيشوفه التقرير: فريق ستيدفاست. وسجلك إنت نفسك شايفه هنا على أساسك.",
+    watchScopeNote:
+      "الشغل بيبدأ لما يكون تطبيق الجهاز الحارس شغال. تقدر توقفه في أي لحظة.",
+    watchOffHint: "اخترت تقف الحماية. تقدر ترجّعها في أي وقت.",
+    watchEnable: "تفعيل الحماية",
+    watchRevoke: "إيقاف الحماية",
+    watchOnLabel: "شغّالة",
+    watchRevokedLabel: "متوقفة",
+    watchSince: "شغّالة من {date}",
+    watchError: "حصلت مشكلة. جرب تاني.",
   },
 
   /** دليل فلترة DNS من كارت الإعدادات. حدود صريحة: التطبيق بيوصل للتعافي
@@ -1538,6 +1578,13 @@ const ar: Dictionary = {
     wipeChatConfirm:
       "تمسح كل رسائل الدردشة مع {n} ملف مرفوع؟ كل الغرف هتفضى والملفات هتتمسح من التخزين. مستحيل يترجّع.",
     wipeChatDone: "اتمسح {n} رسالة و{m} ملف.",
+
+    /** تقارير الأعضاء اللي وافقوا على الحماية. */
+    watchEmpty: "لسه مفيش موافقات شغّالة.",
+    watchSinceLabel: "من",
+    watchBlocked: "محظور",
+    watchAllowed: "مسموح",
+    watchNothing: "لسه مفيش نشاط مسجّل.",
     cancel: "إلغاء",
     accountDeleted: "الحساب اتمسح.",
     filterSearchPlaceholder: "ابحث في الرسائل أو التصنيفات",

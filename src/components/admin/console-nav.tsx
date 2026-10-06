@@ -8,6 +8,7 @@ import {
   BriefcaseIcon,
   ChatIcon,
   DoorIcon,
+  GlobeIcon,
   ShieldIcon,
   UsersIcon,
 } from "@/components/icons";
@@ -28,6 +29,7 @@ const ITEMS: ConsoleItem[] = [
   { href: "/admin/rooms", icon: DoorIcon, labelKey: "rooms" },
   { href: "/admin/jobs", icon: BriefcaseIcon, labelKey: "jobs" },
   { href: "/admin/messages", icon: BellIcon, labelKey: "messages" },
+  { href: "/admin/monitoring", icon: GlobeIcon, labelKey: "watch" },
 ];
 
 /** Section switcher for the console. Deliberately not the member sidebar. */
