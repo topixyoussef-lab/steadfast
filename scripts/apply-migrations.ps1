@@ -39,6 +39,13 @@ param(
   # Override the auto-detected project ref if you have more than one Supabase project.
   [string]$ProjectRef,
 
+  # AWS region where the project lives. The direct host db.<ref>.supabase.co is
+  # IPv6-only for newly created projects, which most machines cannot reach, so
+  # migrations connect to the session pooler in that region instead. Find the
+  # region in the dashboard: Settings > Database > Connection string (the host
+  # reads aws-0-<region>.pooler.supabase.com).
+  [string]$Region = "eu-west-1",
+
   # Migrations to apply, in order.
   [string[]]$Migrations = @(
     "0006_chat_upgrades.sql",
@@ -74,7 +81,10 @@ if (-not $psql) {
 }
 
 $ref = Get-ProjectRef
-$hostName = "db.$ref.supabase.co"
+$hostName = "aws-0-$Region.pooler.supabase.com"
+# The session pooler takes the project ref as part of the role name and strips
+# it before authentication; the dashboard spells it postgres.<project-ref>.
+$dbUser = "postgres.$ref"
 
 if (-not $env:PGPASSWORD) {
   Write-Host ""
@@ -102,7 +112,7 @@ foreach ($name in $Migrations) {
   & $psql.Source `
     --host=$hostName `
     --port=5432 `
-    --username=postgres `
+    --username=$dbUser `
     --dbname=postgres `
     --set=ON_ERROR_STOP=1 `
     --quiet `
@@ -123,8 +133,8 @@ Write-Host "Verifying ..." -ForegroundColor Cyan
 # just saying the migration did not stick.
 $verifySql = @"
 select '0006 reactions='     || case when to_regclass('public.chat_message_reactions') is null then 'MISSING' else 'ok' end
-union all select '0007 moderation_log_delete=' || case when to_regproc('private.delete_moderation_log') is null then 'MISSING' else 'ok' end
-union all select '0008 notification_delete='    || case when to_regproc('private.delete_notification')  is null then 'MISSING' else 'ok' end
+union all select '0007 moderation_log_delete=' || case when not exists (select 1 from pg_policies where schemaname='public' and tablename='moderation_log' and policyname='moderation_log_admin_delete') then 'MISSING' else 'ok' end
+union all select '0008 notification_delete='    || case when not exists (select 1 from pg_policies where schemaname='public' and tablename='notifications' and policyname='notifications_admin_delete') then 'MISSING' else 'ok' end
 union all select '0009 attachments_table='      || case when to_regclass('public.chat_message_attachments') is null then 'MISSING' else 'ok' end
 union all select '0009 attachment_kind='        || case when not exists (select 1 from pg_type where typname = 'attachment_kind') then 'MISSING' else 'ok' end
 union all select '0009 claim_rpc='              || case when to_regproc('public.claim_message_attachments') is null then 'MISSING' else 'ok' end
@@ -140,7 +150,7 @@ union all select '0009 attachments_realtime='    || case when not exists (select
 "@
 
 $check = & $psql.Source `
-  --host=$hostName --port=5432 --username=postgres --dbname=postgres `
+  --host=$hostName --port=5432 --username=$dbUser --dbname=postgres `
   --no-align --tuples-only --quiet `
   --command="$verifySql"
 

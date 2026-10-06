@@ -75,16 +75,23 @@ end $$;
 -- implying a constraint that is not there, because a future client INSERT policy
 -- would be writing into a column with no floor.
 
-do $$ begin
-  if exists (
-    select 1 from pg_constraint
-    where conrelid = 'public.chat_messages'::regclass
-      and contype = 'c'
-      and pg_get_constraintdef(oid) ilike '%char_length(content)%'
-  ) then
-    alter table public.chat_messages
-      drop constraint chat_messages_content_check;
-  end if;
+do $$ declare v_conname text;
+begin
+  -- Drop every old content check by its real name. The generator ACLs and the
+  -- migrations before 0009 have spelled this constraint at least three ways, so
+  -- the name is matched by the definition, not hardcoded -- and the current
+  -- one, chat_messages_content_range, is excluded so a re-run finds nothing to
+  -- drop and this block is idempotent instead of tripping on itself.
+  for v_conname in
+    select conname
+      from pg_constraint
+      where conrelid = 'public.chat_messages'::regclass
+        and contype = 'c'
+        and conname <> 'chat_messages_content_range'
+        and pg_get_constraintdef(oid) ilike '%char_length(content)%'
+  loop
+    execute format('alter table public.chat_messages drop constraint %I', v_conname);
+  end loop;
 end $$;
 
 alter table public.chat_messages
