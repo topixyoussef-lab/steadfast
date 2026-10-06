@@ -67,5 +67,12 @@
       android:layout_height="wrap_content"
       android:layout_marginTop="8dp"
       android:text="@string/btn_stop" />
+
+    <Button
+      android:id="@+id/btnLog"
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:layout_marginTop="8dp"
+      android:text="@string/btn_log" />
   </LinearLayout>
 </ScrollView>

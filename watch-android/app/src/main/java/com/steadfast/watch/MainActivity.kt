@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity() {
       stopService(Intent(this, WatchVpnService::class.java))
       refresh()
     }
+    findViewById<Button>(R.id.btnLog).setOnClickListener { shareLog() }
 
     if (Build.VERSION.SDK_INT >= 33 &&
       checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
@@ -91,13 +92,34 @@ class MainActivity : AppCompatActivity() {
     }
 
     var details = getString(R.string.details_last, lastDomain) +
+      "\n" + getString(R.string.details_packets, WatchVpnService.packetsSeen) +
       "\n" + getString(R.string.details_post, post)
+
+    if (!running && WatchVpnService.packetsSeen == 0L) {
+      details += "\n" + getString(R.string.details_hint)
+    }
 
     privateDnsServer()?.let { server ->
       details += "\n" + getString(R.string.private_dns_warning, server)
     }
 
     detailsText.text = details
+  }
+
+  /** Share <filesDir>/watch.log + screen state as plain text. */
+  private fun shareLog() {
+    val header =
+      "linked=${prefs.contains(Config.KEY_TOKEN)}\n" +
+        "active=${WatchVpnService.active}\n" +
+        "packets=${WatchVpnService.packetsSeen}\n" +
+        "parsed=${WatchVpnService.parsedSeen}\n" +
+        "lastDomain=${WatchVpnService.lastDomain}\n" +
+        "lastSend=${Reporter.lastCode}\n---\n"
+    val send = Intent(Intent.ACTION_SEND).apply {
+      type = "text/plain"
+      putExtra(Intent.EXTRA_TEXT, header + WatchVpnService.logText(this@MainActivity))
+    }
+    startActivity(Intent.createChooser(send, getString(R.string.btn_log)))
   }
 
   /**

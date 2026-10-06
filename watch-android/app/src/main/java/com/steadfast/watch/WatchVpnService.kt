@@ -12,6 +12,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
@@ -44,9 +45,10 @@ class WatchVpnService : VpnService() {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     return try {
       start0(intent, flags, startId)
-    } catch (_: Exception) {
+    } catch (e: Exception) {
       // A security/foreground turndown (e.g. another VPN already owns the
-      // stack): fail quietly instead of crashing the process.
+      // stack): fail visibly instead of crashing the process.
+      logLine("start failed: ${e.message ?: e.toString()}")
       stopSelf()
       START_NOT_STICKY
     }
@@ -71,15 +73,20 @@ class WatchVpnService : VpnService() {
 
     val fd = builder.establish()
     if (fd == null) {
-      // The OS refuses (e.g. another VPN is active); nothing to hold on to.
+      // The OS refuses (e.g. another VPN is active): surface WHY so it is not
+      // mistaken for a working tunnel.
+      logLine("establish() = null -> another VPN active or permission missing?")
       stopSelf()
       return START_NOT_STICKY
     }
 
     tunFd = fd
     writer = FileOutputStream(fd.fileDescriptor)
+    packetsSeen = 0
+    parsedSeen = 0
     lastDomain = null
     active = true
+    logLine("tunnel established (packets will count from 0)")
     Reporter.start(this)
 
     reader = Thread({
@@ -95,14 +102,36 @@ class WatchVpnService : VpnService() {
 
   private fun readLoop(input: FileInputStream) {
     val buf = ByteArray(4096)
+    var errors = 0
     while (true) {
       val n = try {
         input.read(buf)
-      } catch (_: IOException) {
-        break
+      } catch (e: IOException) {
+        if (++errors > 20) {
+          logLine("read failed repeatedly: ${e.message}")
+          break
+        }
+        sleepQuietly(300)
+        continue
       }
-      if (n <= 0) break
+      if (n <= 0) {
+        if (++errors > 20) break
+        sleepQuietly(300)
+        continue
+      }
+      errors = 0
+      packetsSeen++
+      if (packetsSeen <= 3L) logLine("packet #$packetsSeen arrived")
       handlePacket(buf.copyOf(n))
+    }
+    closeTun()
+  }
+
+  private fun sleepQuietly(ms: Long) {
+    try {
+      Thread.sleep(ms)
+    } catch (_: InterruptedException) {
+      Thread.currentThread().interrupt()
     }
   }
 
@@ -128,6 +157,7 @@ class WatchVpnService : VpnService() {
     // never the outer headers.
     val dnsPayload = packet.copyOfRange(28, 28 + payloadLen)
     val dns = Dns.tryParse(dnsPayload, payloadLen, srcIp, srcPort) ?: return
+    parsedSeen++
 
     if (Blocker.isBlocked(dns.domain)) {
       lastDomain = dns.domain
@@ -177,9 +207,20 @@ class WatchVpnService : VpnService() {
     }
     tunFd = null
     active = false
+    logLine("tunnel closed")
     Reporter.stop()
     stopForeground(STOP_FOREGROUND_REMOVE)
     stopSelf()
+  }
+
+  /** Appends one line to <filesDir>/watch.log so the UI can share exactly
+   *  what happened on the device. Also remembers the last line for the screen. */
+  private fun logLine(message: String) {
+    lastLog = message
+    try {
+      File(filesDir, "watch.log").appendText("[${System.currentTimeMillis()}] $message\n")
+    } catch (_: IOException) {
+    }
   }
 
   override fun onDestroy() {
@@ -224,6 +265,23 @@ class WatchVpnService : VpnService() {
 
     /** Last domain the tunnel parsed, so the UI can prove capture works. */
     @Volatile var lastDomain: String? = null
+
+    /** Raw packets that came out of the tunnel (should rise while browsing). */
+    @Volatile var packetsSeen: Long = 0
+
+    /** Of those packets, how many were recognisable DNS queries. */
+    @Volatile var parsedSeen: Long = 0
+
+    /** Last lifecycle line, also appended to watch.log. */
+    @Volatile var lastLog: String? = null
+
+    /** Full log text for the share button (may be empty). */
+    fun logText(context: android.content.Context): String =
+      try {
+        File(context.filesDir, "watch.log").readText().ifEmpty { "no log yet" }
+      } catch (_: IOException) {
+        "no log yet"
+      }
 
     fun start(context: android.content.Context) {
       ContextCompat.startForegroundService(context, Intent(context, WatchVpnService::class.java))

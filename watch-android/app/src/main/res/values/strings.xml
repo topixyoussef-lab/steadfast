@@ -13,8 +13,11 @@
   <string name="btn_link">Link my account</string>
   <string name="counts">Blocked: %1$d  ·  Allowed: %2$d</string>
   <string name="details_last">Last domain captured: %1$s</string>
+  <string name="details_packets">Packets that reached the VPN: %1$s</string>
   <string name="details_post">Last send to server: %1$s</string>
+  <string name="btn_log">Share device log</string>
   <string name="details_none">—</string>
+  <string name="details_hint">No packets are reaching the VPN. Likely another VPN is active, or the browser secures its own DNS (Chrome settings → Secure DNS).</string>
   <string name="post_ok">received (200)</string>
   <string name="post_refused">refused (403) — turn on consent in the web app, or relink</string>
   <string name="post_retry">network error, will retry</string>
